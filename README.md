@@ -1,4 +1,4 @@
-markdown # PayGuard AI
+# PayGuard AI
 
 **AI-Augmented Test Automation Framework for Payment Systems**
 
