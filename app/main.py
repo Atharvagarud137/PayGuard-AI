@@ -1,17 +1,45 @@
 import random
 import string
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException, Header
 from typing import Optional
 
+from fastapi import FastAPI, HTTPException, Header
+
 from app.models import (
-    CardCreateRequest, Card, CardStatus,
-    AuthorizeRequest, CaptureRequest, RefundRequest,
-    Transaction, TransactionStatus, TransactionEvent
+    CardCreateRequest,
+    Card,
+    CardStatus,
+    AuthorizeRequest,
+    CaptureRequest,
+    RefundRequest,
+    Transaction,
+    TransactionStatus,
+    TransactionEvent,
 )
+
 from app.storage import storage
 
-app = FastAPI(title="PayGuard AI - Mock Payment Gateway", version="1.0.0")
+from app.repositories.transaction_repository import TransactionRepository
+from app.services.payment_service import PaymentService
+
+from app.domain.exceptions import (
+    CaptureAmountExceededError,
+    InvalidTransactionStateError,
+    RefundAmountExceededError,
+    TransactionNotFoundError,
+)
+
+
+app = FastAPI(
+    title="PayGuard AI - Mock Payment Gateway",
+    version="1.0.0",
+)
+
+
+# ---------- Dependencies ----------
+
+transaction_repository = TransactionRepository()
+payment_service = PaymentService(transaction_repository)
 
 
 # ---------- Helper Functions ----------
@@ -21,25 +49,43 @@ def generate_masked_card_number() -> str:
     return f"****-****-****-{digits}"
 
 
-def check_simulated_failure(x_simulate_failure: Optional[str]):
+def check_simulated_failure(
+        x_simulate_failure: Optional[str],
+) -> None:
     if x_simulate_failure == "TIMEOUT":
-        raise HTTPException(status_code=504, detail="Simulated timeout occurred")
+        raise HTTPException(
+            status_code=504,
+            detail="Simulated timeout occurred",
+        )
+
     if x_simulate_failure == "NETWORK_ERROR":
-        raise HTTPException(status_code=502, detail="Simulated network error")
+        raise HTTPException(
+            status_code=502,
+            detail="Simulated network error",
+        )
+
     if x_simulate_failure == "INVALID_RESPONSE":
-        raise HTTPException(status_code=500, detail="Simulated invalid response")
+        raise HTTPException(
+            status_code=500,
+            detail="Simulated invalid response",
+        )
 
 
 # ---------- Card Issuance ----------
 
-@app.post("/api/v1/cards", response_model=Card, status_code=201)
+@app.post(
+    "/api/v1/cards",
+    response_model=Card,
+    status_code=201,
+)
 def issue_card(
         request: CardCreateRequest,
-        x_simulate_failure: Optional[str] = Header(default=None)
+        x_simulate_failure: Optional[str] = Header(default=None),
 ):
     check_simulated_failure(x_simulate_failure)
 
     card_number = generate_masked_card_number()
+
     while storage.card_exists_with_number(card_number):
         card_number = generate_masked_card_number()
 
@@ -48,9 +94,11 @@ def issue_card(
         card_number=card_number,
         network=request.network,
         balance=request.initial_balance,
-        expiry_date=request.expiry_date
+        expiry_date=request.expiry_date,
     )
+
     storage.add_card(card)
+
     return card
 
 
@@ -59,32 +107,45 @@ def issue_card(
 @app.post("/api/v1/transactions/authorize")
 def authorize_transaction(
         request: AuthorizeRequest,
-        x_simulate_failure: Optional[str] = Header(default=None)
+        x_simulate_failure: Optional[str] = Header(default=None),
 ):
     check_simulated_failure(x_simulate_failure)
 
     card = storage.get_card(request.card_id)
+
     if not card:
-        raise HTTPException(status_code=404, detail="Card not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Card not found",
+        )
 
     if card.status != CardStatus.ACTIVE:
-        raise HTTPException(status_code=400, detail="Card is not active")
+        raise HTTPException(
+            status_code=400,
+            detail="Card is not active",
+        )
 
     if card.balance < request.amount:
         transaction = Transaction(
             card_id=request.card_id,
             merchant_id=request.merchant_id,
             status=TransactionStatus.DECLINED,
-            decline_reason="INSUFFICIENT_FUNDS"
+            decline_reason="INSUFFICIENT_FUNDS",
         )
+
         transaction.history.append(
-            TransactionEvent(status=TransactionStatus.DECLINED, detail="Insufficient funds")
+            TransactionEvent(
+                status=TransactionStatus.DECLINED,
+                detail="Insufficient funds",
+            )
         )
+
         storage.add_transaction(transaction)
+
         return {
             "transaction_id": transaction.transaction_id,
             "status": transaction.status,
-            "decline_reason": transaction.decline_reason
+            "decline_reason": transaction.decline_reason,
         }
 
     card.balance -= request.amount
@@ -94,17 +155,22 @@ def authorize_transaction(
         card_id=request.card_id,
         merchant_id=request.merchant_id,
         authorized_amount=request.amount,
-        status=TransactionStatus.AUTHORIZED
+        status=TransactionStatus.AUTHORIZED,
     )
+
     transaction.history.append(
-        TransactionEvent(status=TransactionStatus.AUTHORIZED, detail="Authorization approved")
+        TransactionEvent(
+            status=TransactionStatus.AUTHORIZED,
+            detail="Authorization approved",
+        )
     )
+
     storage.add_transaction(transaction)
 
     return {
         "transaction_id": transaction.transaction_id,
         "status": transaction.status,
-        "authorized_amount": transaction.authorized_amount
+        "authorized_amount": transaction.authorized_amount,
     }
 
 
@@ -114,31 +180,38 @@ def authorize_transaction(
 def capture_transaction(
         transaction_id: str,
         request: CaptureRequest,
-        x_simulate_failure: Optional[str] = Header(default=None)
+        x_simulate_failure: Optional[str] = Header(default=None),
 ):
     check_simulated_failure(x_simulate_failure)
 
-    transaction = storage.get_transaction(transaction_id)
-    if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    try:
+        transaction = payment_service.capture(
+            transaction_id=transaction_id,
+            capture_amount=request.capture_amount,
+        )
 
-    if transaction.status != TransactionStatus.AUTHORIZED:
-        raise HTTPException(status_code=409, detail="Transaction is not in AUTHORIZED state")
+    except TransactionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
 
-    if request.capture_amount > transaction.authorized_amount:
-        raise HTTPException(status_code=400, detail="Capture amount exceeds authorized amount")
+    except CaptureAmountExceededError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
-    transaction.captured_amount = request.capture_amount
-    transaction.status = TransactionStatus.CAPTURED
-    transaction.history.append(
-        TransactionEvent(status=TransactionStatus.CAPTURED, detail="Amount captured")
-    )
-    storage.update_transaction(transaction)
+    except InvalidTransactionStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
     return {
         "transaction_id": transaction.transaction_id,
         "status": transaction.status,
-        "captured_amount": transaction.captured_amount
+        "captured_amount": transaction.captured_amount,
     }
 
 
@@ -147,28 +220,31 @@ def capture_transaction(
 @app.post("/api/v1/transactions/{transaction_id}/settle")
 def settle_transaction(
         transaction_id: str,
-        x_simulate_failure: Optional[str] = Header(default=None)
+        x_simulate_failure: Optional[str] = Header(default=None),
 ):
     check_simulated_failure(x_simulate_failure)
 
-    transaction = storage.get_transaction(transaction_id)
-    if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    try:
+        transaction = payment_service.settle(
+            transaction_id=transaction_id,
+        )
 
-    if transaction.status != TransactionStatus.CAPTURED:
-        raise HTTPException(status_code=409, detail="Transaction is not in CAPTURED state")
+    except TransactionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
 
-    transaction.settled_amount = transaction.captured_amount
-    transaction.status = TransactionStatus.SETTLED
-    transaction.history.append(
-        TransactionEvent(status=TransactionStatus.SETTLED, detail="Transaction settled")
-    )
-    storage.update_transaction(transaction)
+    except InvalidTransactionStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
     return {
         "transaction_id": transaction.transaction_id,
         "status": transaction.status,
-        "settled_at": datetime.now(timezone.utc)
+        "settled_at": datetime.now(timezone.utc),
     }
 
 
@@ -178,39 +254,39 @@ def settle_transaction(
 def refund_transaction(
         transaction_id: str,
         request: RefundRequest,
-        x_simulate_failure: Optional[str] = Header(default=None)
+        x_simulate_failure: Optional[str] = Header(default=None),
 ):
     check_simulated_failure(x_simulate_failure)
 
-    transaction = storage.get_transaction(transaction_id)
-    if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    try:
+        transaction, remaining_after = payment_service.refund(
+            transaction_id=transaction_id,
+            refund_amount=request.refund_amount,
+        )
 
-    if transaction.status not in [TransactionStatus.SETTLED, TransactionStatus.PARTIALLY_REFUNDED]:
-        raise HTTPException(status_code=409, detail="Transaction is not settled")
+    except TransactionNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
 
-    remaining = transaction.settled_amount - transaction.refunded_amount
-    if request.refund_amount > remaining:
-        raise HTTPException(status_code=400, detail="Refund amount exceeds remaining refundable balance")
+    except RefundAmountExceededError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
 
-    transaction.refunded_amount += request.refund_amount
-    remaining_after = transaction.settled_amount - transaction.refunded_amount
-
-    if remaining_after == 0:
-        transaction.status = TransactionStatus.REFUNDED
-    else:
-        transaction.status = TransactionStatus.PARTIALLY_REFUNDED
-
-    transaction.history.append(
-        TransactionEvent(status=transaction.status, detail=f"Refunded {request.refund_amount}")
-    )
-    storage.update_transaction(transaction)
+    except InvalidTransactionStateError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
     return {
         "transaction_id": transaction.transaction_id,
         "refund_id": f"refund-{transaction.transaction_id[:8]}",
         "status": transaction.status,
-        "remaining_balance": remaining_after
+        "remaining_balance": remaining_after,
     }
 
 
@@ -218,9 +294,14 @@ def refund_transaction(
 
 @app.get("/api/v1/transactions/{transaction_id}")
 def get_transaction(transaction_id: str):
-    transaction = storage.get_transaction(transaction_id)
+    transaction = transaction_repository.get(transaction_id)
+
     if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found",
+        )
+
     return transaction
 
 
@@ -228,4 +309,6 @@ def get_transaction(transaction_id: str):
 
 @app.get("/")
 def root():
-    return {"message": "PayGuard AI Mock Payment Gateway is running"}
+    return {
+        "message": "PayGuard AI Mock Payment Gateway is running"
+    }
