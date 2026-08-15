@@ -5,8 +5,7 @@ import {
     useState,
 } from "react"
 
-const API_BASE_URL =
-    "http://127.0.0.1:8000/api/v1"
+const API_BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 type TransactionStatus =
     | "AUTHORIZED"
@@ -80,22 +79,17 @@ function toNumber(
         : 0
 }
 
-function formatCurrency(
-    amount: number,
-): string {
+function formatCurrency(amount: number): string {
     const safeAmount = Number.isFinite(amount)
         ? amount
         : 0
 
-    return new Intl.NumberFormat(
-        "en-US",
-        {
-            style: "currency",
-            currency: "USD",
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        },
-    ).format(safeAmount)
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(safeAmount)
 }
 
 function formatRelativeTime(
@@ -145,9 +139,7 @@ function formatRelativeTime(
     )
 
     return `${differenceInDays} day${
-        differenceInDays === 1
-            ? ""
-            : "s"
+        differenceInDays === 1 ? "" : "s"
     } ago`
 }
 
@@ -172,10 +164,6 @@ function getTransactionAmount(
             )
 
         case "AUTHORIZED":
-            return toNumber(
-                transaction.authorized_amount,
-            )
-
         case "DECLINED":
             return toNumber(
                 transaction.authorized_amount,
@@ -265,35 +253,26 @@ function normalizeSummary(
 
     const calculatedSuccessRate =
         totalTransactions > 0
-            ? (
-            successfulTransactions /
-            totalTransactions
-        ) * 100
+            ? (successfulTransactions /
+                totalTransactions) *
+            100
             : 0
 
-    const hasSuppliedSuccessRate =
+    const successRate =
         data?.success_rate !== undefined &&
         data?.success_rate !== null
-
-    const successRate = hasSuppliedSuccessRate
-        ? toNumber(data?.success_rate)
-        : calculatedSuccessRate
+            ? toNumber(data.success_rate)
+            : calculatedSuccessRate
 
     return {
-        total_transactions:
-        totalTransactions,
-
+        total_transactions: totalTransactions,
         successful_transactions:
         successfulTransactions,
-
         pending_transactions:
         pendingTransactions,
-
         declined_transactions:
         declinedTransactions,
-
-        success_rate:
-        successRate,
+        success_rate: successRate,
     }
 }
 
@@ -303,14 +282,10 @@ function normalizeSummary(
 
 export default function Dashboard() {
     const [summary, setSummary] =
-        useState<DashboardSummary | null>(
-            null,
-        )
+        useState<DashboardSummary | null>(null)
 
     const [transactions, setTransactions] =
-        useState<DashboardTransaction[]>(
-            [],
-        )
+        useState<DashboardTransaction[]>([])
 
     const [loading, setLoading] =
         useState(true)
@@ -360,21 +335,16 @@ export default function Dashboard() {
 
                 const normalizedTransactions =
                     safeTransactions.map(
-                        (
-                            transaction,
-                        ) => ({
+                        (transaction) => ({
                             ...transaction,
-
                             amount:
                                 getTransactionAmount(
                                     transaction,
                                 ),
-
                             method:
                                 getPaymentNetwork(
                                     transaction,
                                 ),
-
                             time:
                                 formatRelativeTime(
                                     transaction.created_at,
@@ -426,8 +396,7 @@ export default function Dashboard() {
         if (!summary) {
             return [
                 {
-                    label:
-                        "Total Transactions",
+                    label: "Total Transactions",
                     value: "—",
                     change: "—",
                     description: "loading",
@@ -438,8 +407,7 @@ export default function Dashboard() {
                     label: "Successful",
                     value: "—",
                     change: "—",
-                    description:
-                        "success rate",
+                    description: "success rate",
                     icon: "✓",
                     type: "success",
                 },
@@ -464,25 +432,21 @@ export default function Dashboard() {
             ]
         }
 
-        const total =
-            toNumber(
-                summary.total_transactions,
-            )
+        const total = toNumber(
+            summary.total_transactions,
+        )
 
-        const successful =
-            toNumber(
-                summary.successful_transactions,
-            )
+        const successful = toNumber(
+            summary.successful_transactions,
+        )
 
-        const pending =
-            toNumber(
-                summary.pending_transactions,
-            )
+        const pending = toNumber(
+            summary.pending_transactions,
+        )
 
-        const declined =
-            toNumber(
-                summary.declined_transactions,
-            )
+        const declined = toNumber(
+            summary.declined_transactions,
+        )
 
         const successRate =
             total > 0
@@ -501,83 +465,45 @@ export default function Dashboard() {
 
         return [
             {
-                label:
-                    "Total Transactions",
-
-                value:
-                    String(total),
-
-                change:
-                    "LIVE",
-
+                label: "Total Transactions",
+                value: String(total),
+                change: "LIVE",
                 description:
                     "current gateway volume",
-
-                icon:
-                    "⇄",
-
-                type:
-                    "neutral",
+                icon: "⇄",
+                type: "neutral",
             },
-
             {
-                label:
-                    "Successful",
-
-                value:
-                    String(successful),
-
-                change:
-                    `${successRate.toFixed(1)}%`,
-
-                description:
-                    "success rate",
-
-                icon:
-                    "✓",
-
-                type:
-                    "success",
+                label: "Successful",
+                value: String(successful),
+                change: `${successRate.toFixed(
+                    1,
+                )}%`,
+                description: "success rate",
+                icon: "✓",
+                type: "success",
             },
-
             {
-                label:
-                    "Pending",
-
-                value:
-                    String(pending),
-
-                change:
-                    `${pendingRate.toFixed(1)}%`,
-
+                label: "Pending",
+                value: String(pending),
+                change: `${pendingRate.toFixed(
+                    1,
+                )}%`,
                 description:
                     "awaiting settlement",
-
-                icon:
-                    "◷",
-
-                type:
-                    "warning",
+                icon: "◷",
+                type: "warning",
             },
-
             {
-                label:
-                    "Declined",
-
-                value:
-                    String(declined),
-
-                change:
-                    `${declinedRate.toFixed(1)}%`,
-
+                label: "Declined",
+                value: String(declined),
+                change: `${declinedRate.toFixed(
+                    1,
+                )}%`,
                 description:
                     "requires attention",
-
-                icon:
-                    "!",
-
-                type:
-                    "danger",
+                icon: "!",
+                type: "danger",
             },
         ]
     }, [summary])
@@ -615,9 +541,7 @@ export default function Dashboard() {
                             gateway data
                         </strong>
 
-                        <p>
-                            {error}
-                        </p>
+                        <p>{error}</p>
                     </div>
 
                     <button
@@ -637,64 +561,50 @@ export default function Dashboard() {
                ============================================================== */}
 
             <section className="stats-grid">
-                {stats.map(
-                    (stat) => (
-                        <article
-                            className="stat-card"
-                            key={
-                                stat.label
-                            }
-                        >
-                            <div className="stat-card-top">
-
-                                <div
-                                    className={`stat-icon ${stat.type}`}
-                                >
-                                    {
-                                        stat.icon
-                                    }
-                                </div>
-
-                                <span
-                                    className={`stat-change ${stat.type}`}
-                                >
-                                    {
-                                        stat.change
-                                    }
-                                </span>
-
+                {stats.map((stat) => (
+                    <article
+                        className="stat-card"
+                        key={stat.label}
+                    >
+                        <div className="stat-card-top">
+                            <div
+                                className={`stat-icon ${stat.type}`}
+                            >
+                                {stat.icon}
                             </div>
 
-                            <div className="stat-value">
-                                {loading
-                                    ? "…"
-                                    : stat.value}
-                            </div>
+                            <span
+                                className={`stat-change ${stat.type}`}
+                            >
+                                {stat.change}
+                            </span>
+                        </div>
 
-                            <div className="stat-label">
-                                {
-                                    stat.label
-                                }
-                            </div>
+                        <div className="stat-value">
+                            {loading
+                                ? "…"
+                                : stat.value}
+                        </div>
 
-                            <div className="stat-description">
-                                {
-                                    stat.description
-                                }
-                            </div>
-                        </article>
-                    ),
-                )}
+                        <div className="stat-label">
+                            {stat.label}
+                        </div>
+
+                        <div className="stat-description">
+                            {stat.description}
+                        </div>
+                    </article>
+                ))}
             </section>
 
             {/* ==============================================================
-                Main dashboard
+                Main Dashboard
                ============================================================== */}
 
             <section className="dashboard-grid">
 
                 {/* ----------------------------------------------------------
-                    Transactions
+                    Recent Transactions
                    ---------------------------------------------------------- */}
 
                 <article className="panel transaction-panel">
@@ -702,27 +612,36 @@ export default function Dashboard() {
                     <div className="panel-header">
                         <div>
                             <h2>
-                                Recent
-                                Transactions
+                                Recent Transactions
                             </h2>
 
                             <p>
                                 Latest activity
                                 across the
-                                payment
-                                gateway.
+                                payment gateway.
                             </p>
                         </div>
 
-                        <button
-                            type="button"
-                            className="text-button"
-                            onClick={() =>
-                                void loadDashboard()
-                            }
-                        >
-                            Refresh →
-                        </button>
+                        <div className="transaction-panel-actions">
+
+                            {lastUpdated && (
+                                <span className="dashboard-last-updated">
+                                    Updated{" "}
+                                    {lastUpdated.toLocaleTimeString()}
+                                </span>
+                            )}
+
+                            <button
+                                type="button"
+                                className="text-button"
+                                onClick={() =>
+                                    void loadDashboard()
+                                }
+                            >
+                                Refresh →
+                            </button>
+
+                        </div>
                     </div>
 
                     <div className="transaction-table-wrapper">
@@ -761,11 +680,7 @@ export default function Dashboard() {
 
                             {loading && (
                                 <tr>
-                                    <td
-                                        colSpan={
-                                            6
-                                        }
-                                    >
+                                    <td colSpan={6}>
                                         <div className="dashboard-table-state">
                                             Loading
                                             transactions...
@@ -778,11 +693,7 @@ export default function Dashboard() {
                                 recentTransactions.length ===
                                 0 && (
                                     <tr>
-                                        <td
-                                            colSpan={
-                                                6
-                                            }
-                                        >
+                                        <td colSpan={6}>
                                             <div className="dashboard-table-state">
                                                 No
                                                 transactions
@@ -794,88 +705,75 @@ export default function Dashboard() {
 
                             {!loading &&
                                 recentTransactions.map(
-                                    (
-                                        transaction,
-                                    ) => (
+                                    (transaction) => (
                                         <tr
                                             key={
                                                 transaction.transaction_id
                                             }
                                         >
-
                                             <td>
-                                                    <span className="transaction-id">
-                                                        {
-                                                            transaction.transaction_id
-                                                        }
-                                                    </span>
+                                                <span className="transaction-id">
+                                                    {
+                                                        transaction.transaction_id
+                                                    }
+                                                </span>
                                             </td>
 
                                             <td>
-                                                    <span className="merchant-name">
-                                                        {
-                                                            transaction.merchant_id ||
-                                                            "—"
-                                                        }
-                                                    </span>
+                                                <span className="merchant-name">
+                                                    {
+                                                        transaction.merchant_id ||
+                                                        "—"
+                                                    }
+                                                </span>
                                             </td>
 
                                             <td>
-                                                    <span className="payment-network">
-                                                        {
-                                                            transaction.method
-                                                        }
-                                                    </span>
+                                                <span className="payment-network">
+                                                    {
+                                                        transaction.method
+                                                    }
+                                                </span>
                                             </td>
 
                                             <td>
-                                                    <span className="transaction-amount">
-                                                        {
-                                                            formatCurrency(
-                                                                transaction.amount,
-                                                            )
-                                                        }
-                                                    </span>
+                                                <span className="transaction-amount">
+                                                    {formatCurrency(
+                                                        transaction.amount,
+                                                    )}
+                                                </span>
                                             </td>
 
                                             <td>
-                                                    <span
-                                                        className={`transaction-status ${getStatusClass(
-                                                            transaction.status,
-                                                        )}`}
-                                                    >
-                                                        <span className="status-dot" />
+                                                <span
+                                                    className={`transaction-status ${getStatusClass(
+                                                        transaction.status,
+                                                    )}`}
+                                                >
+                                                    <span className="status-dot" />
 
-                                                        {
-                                                            transaction.status
-                                                        }
-                                                    </span>
+                                                    {
+                                                        transaction.status
+                                                    }
+                                                </span>
                                             </td>
 
                                             <td>
-                                                    <span className="transaction-time">
-                                                        {
-                                                            transaction.time
-                                                        }
-                                                    </span>
+                                                <span className="transaction-time">
+                                                    {
+                                                        transaction.time
+                                                    }
+                                                </span>
                                             </td>
-
                                         </tr>
                                     ),
                                 )}
 
                             </tbody>
-                        </table>
-                    </div>
 
-                    {lastUpdated && (
-                        <div className="dashboard-last-updated">
-                            Last updated{" "}
-                            {
-                                lastUpdated.toLocaleTimeString()
-                            }
-                        </div>
-                    )}
+                        </table>
+
+                    </div>
 
                 </article>
 
@@ -902,20 +800,17 @@ export default function Dashboard() {
 
                         <div className="health-row">
                             <div className="health-service">
-
                                 <span className="service-indicator online" />
 
                                 <div>
                                     <strong>
-                                        Payment
-                                        Gateway
+                                        Payment Gateway
                                     </strong>
 
                                     <span>
                                         FastAPI
                                     </span>
                                 </div>
-
                             </div>
 
                             <span className="health-state">
@@ -925,20 +820,17 @@ export default function Dashboard() {
 
                         <div className="health-row">
                             <div className="health-service">
-
                                 <span className="service-indicator online" />
 
                                 <div>
                                     <strong>
-                                        Transaction
-                                        Service
+                                        Transaction Service
                                     </strong>
 
                                     <span>
                                         PaymentService
                                     </span>
                                 </div>
-
                             </div>
 
                             <span className="health-state">
@@ -948,7 +840,6 @@ export default function Dashboard() {
 
                         <div className="health-row">
                             <div className="health-service">
-
                                 <span className="service-indicator online" />
 
                                 <div>
@@ -960,7 +851,6 @@ export default function Dashboard() {
                                         In-memory
                                     </span>
                                 </div>
-
                             </div>
 
                             <span className="health-state">
@@ -970,7 +860,6 @@ export default function Dashboard() {
 
                         <div className="health-row">
                             <div className="health-service">
-
                                 <span className="service-indicator pending" />
 
                                 <div>
@@ -982,7 +871,6 @@ export default function Dashboard() {
                                         RCA pipeline
                                     </span>
                                 </div>
-
                             </div>
 
                             <span className="health-state pending">
