@@ -2,592 +2,1427 @@
 
 ## Purpose
 
-This document provides instructions for setting up PayGuard AI locally, running the Mock Payment Gateway, executing the automated test suite, and preparing the environment for future UI automation and AI capabilities.
+This document provides instructions for setting up PayGuard AI locally, running the Mock Payment Gateway, executing the automated test suite, and working with the Web Dashboard.
 
-The current development workflow primarily requires Python, the project virtual environment, FastAPI, and Pytest. Docker, Ollama, ChromaDB, the Dashboard, and the AI engine are part of the planned project architecture and should only be configured when those components are being actively developed.
+PayGuard AI is being developed incrementally. The current implementation has established the payment-domain foundation, transaction lifecycle, service layer, repository abstraction, automated regression suite, and the initial Web Dashboard.
+
+At the current project stage, active development of the backend and frontend is temporarily paused. The implemented code and documentation are retained as the baseline for the next development phase.
+
+The current setup therefore focuses on:
+
+- Reproducing the existing backend environment
+- Running the Mock Payment Gateway when required
+- Running the existing automated regression suite
+- Inspecting the Web Dashboard when required
+- Maintaining a clean and reproducible development environment
+- Preserving the current architecture before the next implementation phase
+
+PostgreSQL, AI/RCA infrastructure, Docker orchestration, CI/CD, and other planned platform components are not required for the current baseline.
 
 ---
 
-## Prerequisites
+# Prerequisites
 
-| Requirement | Version | Notes |
+| Requirement | Version / Configuration | Status |
 |---|---|---|
-| Python | 3.11.x | Current development environment |
-| Git | Latest | Required for source control |
-| IntelliJ IDEA | 2026.1 or PyCharm | Recommended development environment |
-| Docker Desktop | Latest | Required for planned containerized services |
-| Ollama | Latest | Required for the planned local LLM/AI layer |
+| Python | 3.11.x | Required |
+| Git | Current stable version | Required |
+| IntelliJ IDEA / PyCharm | Current development environment | Recommended |
+| Node.js / npm | Required when working on the Dashboard | Required for frontend development |
+| Docker Desktop | Current stable version | Planned |
+| Ollama | Current stable version | Planned |
+| PostgreSQL | Current supported version | Planned |
 
-### Current Verified Environment
+## Current Verified Backend Environment
 
-The current project environment has been verified with:
+The current backend environment has been verified with:
 
-```text Python 3.11.9 pytest 9.1.1 FastAPI 0.**141**.1 Starlette 1.6.0 httpx 0.28.1 ````
+```text
+Python 3.11.9
+Pytest 9.1.1
+FastAPI 0.141.1
+Starlette 1.6.0
+HTTPX 0.28.1
+Uvicorn 0.52.1
+Pydantic 2.13.4
+````
 
-The project currently runs successfully using a Python 3.11 virtual environment.
+Patch versions may change as dependency maintenance continues.
 
----
-
-## Step 1: Clone the Repository
-
-Clone the repository and move into the project directory:
-
-```powershell git clone [https://github.com/Atharvagarud137/PayGuard-AI.git](https://github.com/Atharvagarud137/PayGuard-AI.git) cd PayGuard-AI ```
-
-If the repository has already been cloned, simply navigate to the project directory:
-
-```powershell cd D:\Projects\PayGuard-AI ```
-
----
-
-## Step 2: Create the Virtual Environment
-
-Create a project-specific virtual environment:
-
-```powershell python -m venv .venv ```
-
-Activate it on Windows PowerShell:
-
-```powershell .\.venv\Scripts\Activate.ps1 ```
-
-After activation, verify that Python is coming from the project virtual environment:
-
-```powershell python --version python -c *import sys; print(sys.executable)* ```
-
-Expected output should resemble:
-
-```text Python 3.11.9 D:\Projects\PayGuard-AI\.venv\Scripts\python.exe ```
-
-### macOS / Linux
-
-Activate the environment with:
-
-```bash source .venv/bin/activate ```
+The current backend uses an in-memory storage implementation.
 
 ---
 
-## Step 3: Install Python Dependencies
+# Project Structure
 
-If the project contains a requirements file, install the project dependencies with:
+The project currently follows a layered backend architecture with a separate dashboard.
 
-```powershell pip install -r requirements.txt ```
+```text
+PayGuard-AI/
+│
+├── app/
+│   ├── domain/
+│   ├── services/
+│   ├── repositories/
+│   └── ...
+│
+├── tests/
+│   ├── api/
+│   └── unit/
+│
+├── dashboard/
+│   └── ...
+│
+├── docs/
+│   ├── PRD.md
+│   ├── ARCHITECTURE.md
+│   ├── TEST_STRATEGY.md
+│   ├── TECH_STACK.md
+│   ├── API_SPEC.md
+│   ├── AI_PIPELINE.md
+│   └── SETUP.md
+│
+├── .venv/
+├── requirements.txt
+└── ...
+```
 
-If dependencies are being installed manually during development, ensure the virtual environment is active before running `pip install`.
-
-Verify Pytest:
-
-```powershell pytest --version ```
-
-Expected:
-
-```text pytest 9.1.1 ```
-
-The exact patch versions may change as the project dependency set evolves.
+The exact directory structure may evolve as new platform components are introduced.
 
 ---
 
-## Step 4: Verify the Project Environment
+# Step 1: Clone the Repository
 
-Before starting development, verify the Git working tree:
+Clone the repository:
 
-```powershell git status ```
+```powershell
+git clone https://github.com/Atharvagarud137/PayGuard-AI.git
+cd PayGuard-AI
+```
 
-A clean repository should report:
+If the repository has already been cloned, navigate to the project directory:
 
-```text nothing to commit, working tree clean ```
+```powershell
+cd D:\Projects\PayGuard-AI
+```
+
+Verify the repository:
+
+```powershell
+git status
+```
 
 Verify the configured remote:
 
-```powershell git remote -v ```
+```powershell
+git remote -v
+```
 
-The project currently uses:
+The repository remote is:
 
-```text [https://github.com/Atharvagarud137/PayGuard-AI.git](https://github.com/Atharvagarud137/PayGuard-AI.git) ```
+```text
+https://github.com/Atharvagarud137/PayGuard-AI.git
+```
 
 ---
 
-## Step 5: Run the Mock Payment Gateway
+# Step 2: Create the Python Virtual Environment
+
+Create a project-specific virtual environment:
+
+```powershell
+python -m venv .venv
+```
+
+Activate it on Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Verify Python:
+
+```powershell
+python --version
+```
+
+Verify the Python executable:
+
+```powershell
+python -c "import sys; print(sys.executable)"
+```
+
+The executable should point to the project's virtual environment, for example:
+
+```text
+D:\Projects\PayGuard-AI\.venv\Scripts\python.exe
+```
+
+## macOS / Linux
+
+Create the environment:
+
+```bash
+python3 -m venv .venv
+```
+
+Activate it:
+
+```bash
+source .venv/bin/activate
+```
+
+---
+
+# Step 3: Install Backend Dependencies
+
+Ensure the virtual environment is active.
+
+Upgrade pip if required:
+
+```powershell
+python -m pip install --upgrade pip
+```
+
+Install project dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Verify Pytest:
+
+```powershell
+pytest --version
+```
+
+Verify FastAPI:
+
+```powershell
+python -c "import fastapi; print(fastapi.__version__)"
+```
+
+Verify Uvicorn:
+
+```powershell
+uvicorn --version
+```
+
+The exact dependency versions may change as the project evolves.
+
+---
+
+# Step 4: Verify the Backend Environment
+
+Before running the application or tests, verify:
+
+```powershell
+python --version
+pytest --version
+git status
+```
+
+The Python interpreter should belong to `.venv`.
+
+The Git working tree should be inspected before making changes:
+
+```powershell
+git status
+```
+
+Do not commit:
+
+* `.venv/`
+* Generated logs
+* Temporary files
+* Cache directories
+* Local environment files
+* Generated test artifacts
+* Unrelated IDE files
+
+unless they are explicitly intended to be tracked by the project.
+
+---
+
+# Step 5: Run the Mock Payment Gateway
 
 The Mock Payment Gateway is implemented using FastAPI.
 
-Start the development server with:
+Start the backend with:
 
-```powershell uvicorn app.main:app --reload --reload-dir app --port **8000** ```
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
 
-### Important: Use `--reload-dir app`
+## Important: Use `--reload-dir app`
 
-Always prefer:
+The project is located in a OneDrive-synchronized directory.
 
-```powershell uvicorn app.main:app --reload --reload-dir app --port **8000** ```
+Avoid unrestricted:
 
-rather than:
+```powershell
+uvicorn app.main:app --reload
+```
 
-```powershell uvicorn app.main:app --reload ```
+during development.
 
-The project is located in a OneDrive-synchronized directory. When Uvicorn watches the entire project directory, changes made by OneDrive inside `.venv` can be detected as source-code changes.
+Instead, use:
 
-This can cause:
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
 
-- Unexpected server restarts
-- Loss of in-memory card data
-- Loss of in-memory transaction data
-- Confusing test/development behavior
+Restricting the reload watcher to `app/` prevents unrelated changes in `.venv/`, IDE metadata, synchronized files, and other project directories from triggering unnecessary application restarts.
 
-Restricting Uvicorn's reload watcher to the `app` directory prevents it from monitoring the virtual environment and other unrelated project files.
+This is particularly important because the current application uses in-memory storage.
 
-### Verify the API
+An unintended restart clears:
 
-Once the server is running, open:
-
-```text [http://localhost:**8000**/docs](http://localhost:**8000**/docs) ```
-
-The FastAPI Swagger UI should display the available payment gateway endpoints.
+* Cards
+* Transactions
+* Transaction history
+* Other in-memory application state
 
 ---
 
-## Step 6: Run the Automated Tests
+# Step 6: Verify the API
 
-The current project has three implemented automated test layers:
+With Uvicorn running, the root endpoint is:
 
 ```text
-### State Machine Tests
-        ↓
-### Payment Service Tests
-        ↓
-**API** Tests
+http://localhost:8000/
 ```
 
-The current regression baseline is:
+The FastAPI Swagger UI is available at:
 
-```text 64 tests 64 passed 0 failed ```
+```text
+http://localhost:8000/docs
+```
 
-### Run the complete test suite
+The raw OpenAPI specification is available at:
+
+```text
+http://localhost:8000/openapi.json
+```
+
+The API base path is:
+
+```text
+http://localhost:8000/api/v1
+```
+
+The Swagger UI should expose the currently implemented payment operations.
+
+These include the core payment lifecycle:
+
+```text
+Card Issuance
+     |
+     v
+Authorization
+     |
+     v
+Capture
+     |
+     v
+Settlement
+     |
+     v
+Refund
+```
+
+Transaction lookup is also available for inspecting transaction state and history.
+
+---
+
+# Step 7: Run the Automated Test Suite
+
+The current automated test architecture contains three implemented layers:
+
+```text
+State Machine Tests
+        |
+        v
+Payment Service Tests
+        |
+        v
+API Tests
+```
+
+The current documented regression baseline is:
+
+```text
+64 tests
+64 passed
+0 failed
+```
+
+## Run the Complete Regression Suite
 
 From the project root:
 
-```powershell pytest -v ```
+```powershell
+pytest -v
+```
 
-This is the recommended command after changes affecting the payment domain, service layer, state machine, repository, or **API**.
+This is the primary regression command.
 
-### Run API tests
+Run the complete suite after changes affecting:
 
-```powershell pytest tests/api -v ```
+* Payment-domain logic
+* Transaction lifecycle
+* State machine
+* Payment service
+* Repository behavior
+* API endpoints
+* Request/response models
+* Transaction history
 
-The **API** suite currently contains 36 tests.
+---
 
-### Run Payment Service tests
+# Run API Tests
 
-```powershell pytest tests/unit/test_payment_service.py -v ```
+```powershell
+pytest tests/api -v
+```
 
-The Payment Service suite currently contains 14 tests.
+Current documented API baseline:
 
-### Run State Machine tests
+```text
+36 tests
+```
 
-```powershell pytest tests/unit/test_state_machine.py -v ```
+The API tests cover payment gateway behavior including:
 
-The State Machine suite currently contains 14 tests.
+* Card issuance
+* Authorization
+* Capture
+* Settlement
+* Refunds
+* Validation failures
+* Invalid transaction states
+* Boundary conditions
+* Simulated technical failures
 
-### Current Test Baseline
+---
 
-| Test Layer      |  Tests | Current Result           |
+# Run Payment Service Tests
+
+```powershell
+pytest tests/unit/test_payment_service.py -v
+```
+
+Current documented baseline:
+
+```text
+14 tests
+```
+
+These tests validate payment business logic independently of FastAPI and HTTP behavior.
+
+---
+
+# Run State Machine Tests
+
+```powershell
+pytest tests/unit/test_state_machine.py -v
+```
+
+Current documented baseline:
+
+```text
+14 tests
+```
+
+These tests validate transaction lifecycle rules independently from the API and storage implementation.
+
+---
+
+# Current Regression Baseline
+
+| Test Layer      |  Tests | Expected Result          |
 | --------------- | -----: | ------------------------ |
 | API             |     36 | Passing                  |
 | Payment Service |     14 | Passing                  |
 | State Machine   |     14 | Passing                  |
 | **Total**       | **64** | **64 Passed / 0 Failed** |
 
----
+The 64-test baseline represents the currently documented regression suite.
 
-## Step 7: Access the API Documentation
+When new functionality is added, the test count is expected to increase.
 
-With the FastAPI server running, open:
-
-```text [http://localhost:**8000**/docs](http://localhost:**8000**/docs) ```
-
-This provides the interactive Swagger UI for the Mock Payment Gateway.
-
-The root health endpoint is:
-
-```text [http://localhost:**8000**/](http://localhost:**8000**/) ```
-
-It should return:
-
-```json { *message*: *PayGuard AI Mock Payment Gateway is running* } ```
+The important requirement is that the full regression suite remains green.
 
 ---
 
-## Step 8: Run UI Tests
+# Step 8: Web Dashboard
 
-UI automation is part of the planned architecture and will use Selenium.
+The project contains a Web Dashboard intended to provide a visual interface for payment transaction monitoring and future Selenium automation.
 
-When the Dashboard and corresponding UI test suite have been implemented, UI tests can be executed with:
+The dashboard is currently treated as a separate frontend application from the FastAPI backend.
 
-```powershell pytest tests/ui -v ```
+The dashboard is intended to provide visibility into concepts such as:
 
-The Dashboard and Mock Payment Gateway will need to be running before executing tests that depend on live browser/**API** services.
+* Payment transactions
+* Transaction status
+* Transaction details
+* Transaction lifecycle
+* Transaction history
+* Payment cards
+* System information
+* AI-related functionality planned for later phases
 
-### Current Status
+The transaction lifecycle displayed by the dashboard follows the backend payment-domain model.
 
-```text UI Dashboard       Planned Selenium Tests     Planned ```
+```text
+AUTHORIZED
+     |
+     v
+CAPTURED
+     |
+     v
+SETTLED
+     |
+     +----------------------+
+     |                      |
+     v                      v
+PARTIALLY_REFUNDED      REFUNDED
+     |
+     v
+REFUNDED
+```
 
-Therefore, UI test execution is not part of the current 64-test regression baseline.
+The Dashboard should not become a second implementation of payment business rules.
 
----
+The backend remains the source of truth for:
 
-## Step 9: Configure the AI Environment
+* Transaction state
+* Payment business rules
+* Lifecycle transitions
+* Transaction persistence
+* Domain validation
 
-The AI layer is planned to use:
-
-- LangChain
-- LangGraph
-- ChromaDB
-- Ollama
-- A local **LLM**
-
-These components are not required to run the current payment-domain test suite.
-
-### Install Ollama
-
-Install Ollama for the appropriate operating system.
-
-Verify the installation:
-
-```powershell ollama --version ```
-
-Pull the selected local model when the AI pipeline is ready:
-
-```powershell ollama pull llama3.1 ```
-
-Verify installed models:
-
-```powershell ollama list ```
-
-### Current Status
-
-```text AI **RCA** Engine          Planned AI Test Case Generator Planned ChromaDB Integration   Planned Ollama Integration    Planned ```
-
-Do not treat the presence of these dependencies in the Python environment as evidence that the AI pipeline is currently implemented.
+The frontend should primarily consume and present backend data.
 
 ---
 
-## Step 10: Docker Services
+# Current Frontend Development Status
 
-Docker is part of the planned project architecture.
+Frontend and backend development are currently paused.
 
-The intended Docker-based environment will eventually include services such as:
+This does not mean the existing implementation should be removed.
 
-```text ### Mock Payment Gateway ### Web Dashboard PostgreSQL ChromaDB Ollama ```
+The current state should be treated as a stable development checkpoint.
 
-When the corresponding Docker Compose configuration is implemented, the expected command will be:
+```text
+Implemented Backend
+        |
+        v
+Implemented Dashboard Foundation
+        |
+        v
+Documentation Updated
+        |
+        v
+Development Paused
+```
 
-```powershell docker compose -f docker/docker-compose.yml up -d ```
+The purpose of the pause is to preserve the current architecture and establish a clean baseline before introducing the next major architectural capability.
 
-To inspect running containers:
-
-```powershell docker ps ```
-
-To stop the services:
-
-```powershell docker compose -f docker/docker-compose.yml down ```
-
-### Current Status
-
-Docker-based orchestration is not required for the current payment-domain test suite.
+The next implementation phase should be selected deliberately rather than adding functionality simply because the project has empty roadmap boxes.
 
 ---
 
-## Current Development Workflow
+# Running the Dashboard
 
-For normal backend development, the recommended workflow is:
+The exact frontend startup command depends on the dashboard's package configuration.
 
-### 1. Activate the virtual environment
+From the dashboard directory:
 
-```powershell .\.venv\Scripts\Activate.ps1 ```
+```powershell
+cd dashboard
+```
 
-### 2. Verify Python
+Install frontend dependencies when required:
 
-```powershell python --version ```
+```powershell
+npm install
+```
 
-### 3. Start the API if endpoint testing is required
+Then use the development script defined in `dashboard/package.json`.
 
-```powershell uvicorn app.main:app --reload --reload-dir app --port **8000** ```
+Typically this will be:
 
-### 4. Make the code change
+```powershell
+npm run dev
+```
 
-Implement the required change while keeping payment-domain logic separated from the **API** layer.
+or:
 
-### 5. Run targeted tests
+```powershell
+npm start
+```
+
+Use the command actually defined in `package.json` rather than assuming a framework-specific command.
+
+To inspect the available scripts:
+
+```powershell
+npm run
+```
+
+The frontend should be treated independently from the FastAPI process.
+
+---
+
+# Backend and Frontend Relationship
+
+The intended local development topology is:
+
+```text
+┌──────────────────────────┐
+│      Web Dashboard       │
+│       Frontend           │
+└────────────┬─────────────┘
+             |
+             | HTTP
+             v
+┌──────────────────────────┐
+│     FastAPI Gateway      │
+│       Port 8000          │
+└────────────┬─────────────┘
+             |
+             v
+┌──────────────────────────┐
+│    Payment Service       │
+└────────────┬─────────────┘
+             |
+             v
+┌──────────────────────────┐
+│   Payment Domain /       │
+│   Transaction State      │
+└────────────┬─────────────┘
+             |
+             v
+┌──────────────────────────┐
+│ Transaction Repository   │
+└────────────┬─────────────┘
+             |
+             v
+┌──────────────────────────┐
+│    In-Memory Storage     │
+└──────────────────────────┘
+```
+
+The Dashboard should communicate with the backend through the API rather than directly accessing application internals.
+
+---
+
+# Step 9: UI Automation
+
+Selenium is part of the planned test automation architecture.
+
+When the UI test suite is implemented, the expected command is:
+
+```powershell
+pytest tests/ui -v
+```
+
+The Dashboard and Mock Payment Gateway will need to be running for tests that depend on live services.
+
+Planned UI coverage includes:
+
+* Dashboard availability
+* Transaction listing
+* Transaction lookup
+* Transaction status
+* Transaction lifecycle visibility
+* Transaction history
+* Card visibility
+* Error-state presentation
+* User-visible payment workflow behavior
+
+UI tests should validate user-visible behavior rather than duplicate the complete API regression suite.
+
+---
+
+# Step 10: AI Environment
+
+The AI layer is planned but is not required for the current payment-domain baseline.
+
+The planned AI stack includes:
+
+* LangChain
+* LangGraph
+* ChromaDB
+* Ollama
+* Local LLM
+* Failure-log processing
+* AI Root Cause Analysis
+* AI test-case generation
+
+These components should not be installed merely to run the current backend regression suite.
+
+The intended architecture is:
+
+```text
+Test Failure
+     |
+     v
+Failure Context
+     |
+     v
+Historical Failure Retrieval
+     |
+     v
+Local LLM
+     |
+     v
+RCA Summary
+```
+
+The AI Test Case Generator will eventually consume the FastAPI OpenAPI specification and generate reviewable test suggestions.
+
+---
+
+# Ollama
+
+Ollama is part of the planned local AI environment.
+
+When the AI pipeline is actively developed, verify the installation:
+
+```powershell
+ollama --version
+```
+
+A model can then be installed according to the model selected for the project.
 
 For example:
 
-```powershell pytest tests/unit/test_payment_service.py -v ```
+```powershell
+ollama pull llama3.1
+```
 
-or:
+List installed models:
 
-```powershell pytest tests/api -v ```
+```powershell
+ollama list
+```
 
-### 6. Run the complete regression suite
+The exact model should be finalized based on the evaluation requirements and available local hardware.
 
-```powershell pytest -v ```
-
-### 7. Check Git status
-
-```powershell git status ```
-
-### 8. Commit the verified change
-
-```powershell git add . git commit -m *describe the change* git push origin main ```
+Do not treat an installed Ollama model as evidence that the AI pipeline itself is implemented.
 
 ---
 
-## OneDrive-Specific Considerations
+# Step 11: Docker
+
+Docker is planned for integrated local and CI environments.
+
+The intended environment will eventually contain services such as:
+
+```text
+Mock Payment Gateway
+        |
+        +-- PostgreSQL
+        |
+        +-- Web Dashboard
+        |
+        +-- ChromaDB
+        |
+        +-- Ollama
+```
+
+When the Docker Compose implementation exists, the expected command will be:
+
+```powershell
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Inspect running containers:
+
+```powershell
+docker ps
+```
+
+Stop the Compose environment:
+
+```powershell
+docker compose -f docker/docker-compose.yml down
+```
+
+Docker is not currently required for the documented 64-test backend regression suite.
+
+---
+
+# Current Development Workflow
+
+For backend changes:
+
+## 1. Activate the virtual environment
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+## 2. Verify Python
+
+```powershell
+python --version
+```
+
+## 3. Make the change
+
+Keep payment-domain logic separated from:
+
+* FastAPI routing
+* HTTP-specific behavior
+* Storage implementation details
+
+## 4. Run targeted tests
+
+For service changes:
+
+```powershell
+pytest tests/unit/test_payment_service.py -v
+```
+
+For state-machine changes:
+
+```powershell
+pytest tests/unit/test_state_machine.py -v
+```
+
+For API changes:
+
+```powershell
+pytest tests/api -v
+```
+
+## 5. Run the complete regression suite
+
+```powershell
+pytest -v
+```
+
+## 6. Inspect the Git working tree
+
+```powershell
+git status
+```
+
+## 7. Review the actual diff
+
+```powershell
+git diff
+```
+
+## 8. Commit only verified changes
+
+```powershell
+git add .
+git commit -m "describe the change"
+```
+
+## 9. Push the commit
+
+```powershell
+git push origin main
+```
+
+Do not commit a change simply because the application starts. Payment software has a long and unfortunate history of technically functioning software behaving incorrectly.
+
+---
+
+# OneDrive-Specific Considerations
 
 The project is currently located in a OneDrive-synchronized directory.
 
-OneDrive synchronization can occasionally interfere with development tools that monitor files or modify large numbers of files.
+OneDrive synchronization may interfere with:
+
+* File watchers
+* Dependency installation
+* Virtual-environment files
+* Temporary files
+* IDE indexing
+* Uvicorn reload behavior
 
 Potential symptoms include:
 
-- File lock errors
-- Slow dependency installation
-- Unexpected file-change detection
-- Unexpected Uvicorn reloads
-- In-memory application data disappearing after an unintended restart
+* Unexpected Uvicorn restarts
+* File locking
+* Slow dependency operations
+* Changes appearing in Git unexpectedly
+* In-memory transaction data disappearing
 
-### Recommended mitigation
+If synchronization is interfering with development, temporarily pause OneDrive synchronization while performing the affected operation.
 
-If file operations are being disrupted, temporarily pause OneDrive synchronization while performing the operation.
-
-Resume synchronization after the operation is complete.
-
-### Uvicorn Reload Issue
-
-The most important OneDrive-specific configuration is:
-
-```powershell uvicorn app.main:app --reload --reload-dir app --port **8000** ```
-
-Do not use unrestricted project-wide reload monitoring during development.
+Resume synchronization afterward.
 
 ---
 
-## Common Issues
+# Uvicorn Reload Configuration
 
-### 1. Uvicorn repeatedly restarts
+The recommended development command is:
 
-**Symptom:**
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
 
-The FastAPI application repeatedly restarts without changes being made to application source files.
+The important part is:
 
-**Likely cause:**
+```text
+--reload-dir app
+```
 
-Uvicorn is monitoring `.venv` or other OneDrive-managed files.
+This limits automatic reload monitoring to the backend application source.
 
-**Solution:**
+Avoid:
 
-Run:
+```powershell
+uvicorn app.main:app --reload
+```
 
-```powershell uvicorn app.main:app --reload --reload-dir app --port **8000** ```
+when the project is located inside the synchronized directory.
 
 ---
 
-### 2. Card or transaction data disappears
+# Common Issues
 
-**Symptom:**
+## 1. Uvicorn repeatedly restarts
+
+### Symptom
+
+The FastAPI application restarts without intentional changes to application source files.
+
+### Likely cause
+
+Uvicorn is monitoring `.venv`, IDE files, synchronized files, or other project directories.
+
+### Solution
+
+Use:
+
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+---
+
+# 2. Card or transaction data disappears
+
+### Symptom
 
 Cards or transactions created during a session suddenly disappear.
 
-**Cause:**
+### Cause
 
-The current application uses in-memory storage. Any application restart clears the stored data.
+The current application uses in-memory storage.
 
-An unexpected Uvicorn reload can therefore appear to be a payment-data problem when it is actually an application restart.
+Any application restart clears:
 
-**Solution:**
+* Cards
+* Transactions
+* Transaction history
+* Other in-memory state
 
-Check the Uvicorn console for unexpected reloads and ensure that `--reload-dir app` is being used.
+An unintended Uvicorn reload can therefore appear to be a payment-data problem.
 
-Persistent PostgreSQL storage is planned for a future milestone.
+### Solution
+
+Check the Uvicorn console for an unexpected restart.
+
+Use:
+
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+Persistent database storage is a future architectural phase.
 
 ---
 
-### 3. Tests fail after an application change
+# 3. Tests fail after a code change
 
 First run the affected test layer:
 
-```powershell pytest tests/unit/test_payment_service.py -v ```
+```powershell
+pytest tests/unit/test_payment_service.py -v
+```
 
 or:
 
-```powershell pytest tests/api -v ```
+```powershell
+pytest tests/api -v
+```
 
-Then run the complete suite:
+or:
 
-```powershell pytest -v ```
+```powershell
+pytest tests/unit/test_state_machine.py -v
+```
 
-Do not assume that a targeted test passing means the entire payment lifecycle remains unaffected.
+Then run:
+
+```powershell
+pytest -v
+```
+
+Do not consider a targeted test passing sufficient evidence that the complete payment lifecycle remains correct.
 
 ---
 
-### 4. Git reports unexpected file changes
+# 4. Git reports unexpected changes
 
 Check:
 
-```powershell git status ```
+```powershell
+git status
+```
 
-If OneDrive has modified or synchronized files during development, inspect the changes before committing.
+Then inspect:
 
-Do not blindly commit generated files, virtual-environment files, logs, or temporary artifacts.
+```powershell
+git diff
+```
+
+Do not blindly commit changes produced by:
+
+* OneDrive
+* IDEs
+* Build tools
+* Test execution
+* Dependency installation
+* Temporary scripts
 
 ---
 
-### 5. Virtual environment is not being used
+# 5. Virtual environment is not active
 
 Verify:
 
-```powershell python -c *import sys; print(sys.executable)* ```
+```powershell
+python -c "import sys; print(sys.executable)"
+```
 
-The executable should point to:
+The path should point to:
 
-```text D:\Projects\PayGuard-AI\.venv\Scripts\python.exe ```
+```text
+D:\Projects\PayGuard-AI\.venv\Scripts\python.exe
+```
 
-If it does not, activate the environment again:
+If it does not, activate the environment:
 
-```powershell .\.venv\Scripts\Activate.ps1 ```
-
----
-
-## Dependency / Test Client Note
-
-The current environment contains:
-
-```text FastAPI 0.**141**.1 Starlette 1.6.0 httpx 0.28.1 ```
-
-The current FastAPI/Starlette test stack reports a deprecation warning related to the TestClient **HTTP** client dependency.
-
-This warning does not currently cause test failures.
-
-The project should address the dependency compatibility warning through the appropriate `httpx2` dependency rather than downgrading FastAPI or Starlette solely to suppress the warning.
-
-After dependency changes, always verify the complete suite:
-
-```powershell pytest -v ```
-
-The functional baseline should remain:
-
-```text 64 tests 64 passed 0 failed ```
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
 
 ---
 
-## Verification Checklist
+# 6. Port 8000 is already in use
 
-Use the following checklist when setting up a new development environment.
+Check which process is using port 8000:
 
-### Core Environment
+```powershell
+netstat -ano | findstr :8000
+```
 
-- [ ] Python 3.11.x installed
-- [ ] Git installed
-- [ ] Repository cloned
-- [ ] `.venv` created
-- [ ] `.venv` activated
-- [ ] Python executable verified
-- [ ] Dependencies installed
-- [ ] Pytest available
+If another development server is running, stop it before starting another Uvicorn instance.
 
-### Backend
+Alternatively, run the application on another port:
 
-- [ ] FastAPI starts successfully
-- [ ] Uvicorn uses `--reload-dir app`
-- [ ] `[http://localhost:**8000**/`](http://localhost:**8000**/`) responds
-- [ ] `[http://localhost:**8000**/docs`](http://localhost:**8000**/docs`) loads
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8001
+```
 
-### Tests
-
-- [ ] **API** tests pass
-- [ ] Payment Service tests pass
-- [ ] State Machine tests pass
-- [ ] Complete regression suite passes
-- [ ] Current baseline remains 64 passed
-
-### Future Components
-
-- [ ] Dashboard configured
-- [ ] Selenium configured
-- [ ] Docker configured
-- [ ] PostgreSQL configured
-- [ ] Ollama configured
-- [ ] ChromaDB configured
-- [ ] AI **RCA** pipeline configured
-- [ ] AI Test Case Generator configured
-- [ ] CI/CD configured
+If the frontend expects port 8000, update its API configuration accordingly rather than creating a mysterious networking problem and then blaming the computer.
 
 ---
 
-## Current Project State
+# 7. Dashboard cannot reach the API
 
-The current setup is sufficient to develop and test the core payment-domain implementation.
+Verify that the backend is running:
 
-The currently required development stack is:
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+Then verify:
+
+```text
+http://localhost:8000/
+```
+
+and:
+
+```text
+http://localhost:8000/docs
+```
+
+If the backend is available but the Dashboard cannot communicate with it, inspect:
+
+* Frontend API base URL
+* Browser console errors
+* Network requests
+* CORS configuration
+* Backend terminal logs
+
+Do not modify backend payment logic to solve a frontend configuration problem.
+
+---
+
+# 8. Dashboard dependency installation fails
+
+From the dashboard directory:
+
+```powershell
+cd dashboard
+```
+
+Check Node.js:
+
+```powershell
+node --version
+```
+
+Check npm:
+
+```powershell
+npm --version
+```
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Inspect available scripts:
+
+```powershell
+npm run
+```
+
+Then use the script defined by the project.
+
+---
+
+# Dependency / Test Client Note
+
+The documented backend environment currently contains:
+
+```text
+FastAPI 0.141.1
+Starlette 1.6.0
+HTTPX 0.28.1
+```
+
+The existing environment may produce a TestClient-related deprecation warning associated with the HTTP client dependency.
+
+A warning should not be confused with a test failure.
+
+Before changing FastAPI, Starlette, or HTTPX versions, verify the actual compatibility requirements of the installed stack and run:
+
+```powershell
+pytest -v
+```
+
+Do not downgrade core framework dependencies merely to silence a warning without understanding the compatibility impact.
+
+The functional regression baseline remains:
+
+```text
+64 tests
+64 passed
+0 failed
+```
+
+unless the test suite has intentionally changed.
+
+---
+
+# Environment Variables
+
+The current documented payment gateway does not require production credentials or external service secrets to run the core regression suite.
+
+Do not place secrets directly into source files.
+
+If environment variables are introduced in future phases, use a local environment file that is excluded from Git:
+
+```text
+.env
+```
+
+Never commit:
+
+* API keys
+* Passwords
+* Database credentials
+* LLM provider credentials
+* Production payment credentials
+* Real cardholder data
+
+The mock gateway should continue to use non-production test data.
+
+---
+
+# Test Data Requirements
+
+The current test environment should use deterministic, synthetic payment data.
+
+Never use:
+
+* Real PANs
+* Real CVVs
+* Production card credentials
+* Real customer payment information
+* Production authentication credentials
+
+The project is a Mock Payment Gateway and is not a PCI-DSS-certified payment processing environment.
+
+---
+
+# Verification Checklist
+
+Use this checklist when setting up or restoring the development environment.
+
+## Core Environment
+
+* [ ] Python 3.11.x installed
+* [ ] Git installed
+* [ ] Repository cloned
+* [ ] `.venv` created
+* [ ] `.venv` activated
+* [ ] Python executable verified
+* [ ] Backend dependencies installed
+* [ ] Pytest available
+
+## Backend
+
+* [ ] FastAPI starts successfully
+* [ ] Uvicorn uses `--reload-dir app`
+* [ ] `http://localhost:8000/` responds
+* [ ] `http://localhost:8000/docs` loads
+* [ ] `http://localhost:8000/openapi.json` loads
+
+## Tests
+
+* [ ] API tests pass
+* [ ] Payment Service tests pass
+* [ ] State Machine tests pass
+* [ ] Complete regression suite passes
+* [ ] Current documented baseline remains 64 passed
+
+## Dashboard
+
+* [ ] Node.js installed
+* [ ] npm available
+* [ ] Dashboard dependencies installed
+* [ ] Dashboard starts successfully when required
+* [ ] Dashboard can reach the FastAPI backend
+* [ ] Transaction lifecycle renders correctly
+
+## Future Components
+
+* [ ] Selenium configured
+* [ ] PostgreSQL configured
+* [ ] Docker configured
+* [ ] Ollama configured
+* [ ] ChromaDB configured
+* [ ] AI RCA pipeline configured
+* [ ] AI Test Case Generator configured
+* [ ] CI/CD configured
+* [ ] OpenTelemetry configured
+
+---
+
+# Current Project State
+
+The current development baseline consists of:
 
 ```text
 Python 3.11
     |
     +-- FastAPI
     |
+    +-- Pydantic
+    |
+    +-- Uvicorn
+    |
     +-- Pytest
     |
     +-- In-Memory Storage
+    |
+    +-- Web Dashboard
 ```
 
-The planned platform will progressively extend this environment:
+The backend architecture is:
 
 ```text
-Current
+FastAPI
     |
     v
-### Payment Reliability
+Payment Service
     |
     v
-PostgreSQL
+Payment Domain / State Machine
     |
     v
-UI + Selenium
+Transaction Repository
     |
     v
-AI **RCA** + Test Generation
-    |
-    v
-Docker + CI/CD
-    |
-    v
-Observability + Production-Oriented Hardening
+In-Memory Storage
 ```
 
-The current milestone is considered healthy when:
+The current documented regression baseline is:
 
-```text pytest -v ```
+```text
+64 tests
+64 passed
+0 failed
+```
 
-returns:
+The broader planned architecture is:
 
-```text 64 passed 0 failed ```
+```text
+Current Payment Foundation
+        |
+        v
+Payment Reliability
+        |
+        v
+PostgreSQL
+        |
+        v
+UI + Selenium
+        |
+        v
+AI RCA + Test Generation
+        |
+        v
+Docker + CI/CD
+        |
+        v
+Observability + Security Hardening
+```
+
+The project is currently paused at the existing backend/frontend checkpoint.
+
+The next architectural phase should be introduced only after its requirements are defined and the corresponding documentation, implementation, and tests are aligned.
 
 ---
 
-## Stopping Services
+# Documentation References
 
-### Stop Uvicorn
+The project documentation is organized as follows:
 
-Press:
+| Document                | Purpose                                            |
+| ----------------------- | -------------------------------------------------- |
+| `docs/PRD.md`           | Product requirements, scope, and success criteria  |
+| `docs/ARCHITECTURE.md`  | System architecture and component interactions     |
+| `docs/TEST_STRATEGY.md` | Testing strategy and regression approach           |
+| `docs/TECH_STACK.md`    | Technology choices and architectural justification |
+| `docs/API_SPEC.md`      | Mock Payment Gateway API contract                  |
+| `docs/AI_PIPELINE.md`   | Planned AI RCA and test-generation architecture    |
+| `docs/SETUP.md`         | Local development and environment setup            |
 
-```text **CTRL** + C ```
+These documents should remain consistent with the actual implementation.
 
-in the terminal running Uvicorn.
+A planned capability should not be documented as implemented merely because its directory, dependency, or placeholder exists.
 
-### Stop Docker Services
+---
+
+# Stopping Services
+
+## Stop Uvicorn
+
+In the terminal running the backend, press:
+
+```text
+CTRL + C
+```
+
+This stops the FastAPI development server.
+
+Because the current application uses in-memory storage, stopping or restarting the backend clears runtime payment data.
+
+---
+
+## Stop the Dashboard
+
+Stop the frontend development process using:
+
+```text
+CTRL + C
+```
+
+in the terminal running the Dashboard.
+
+---
+
+## Stop Docker Services
 
 When Docker Compose is being used:
 
-```powershell docker compose -f docker/docker-compose.yml down ```
+```powershell
+docker compose -f docker/docker-compose.yml down
+```
 
-To remove containers and associated Compose resources:
+To remove orphaned containers:
 
-```powershell docker compose -f docker/docker-compose.yml down --remove-orphans ```
+```powershell
+docker compose -f docker/docker-compose.yml down --remove-orphans
+```
+
+Docker is currently part of the planned platform architecture rather than a requirement for the core backend regression suite.
+
+---
+
+# Final Development Verification
+
+Before considering a backend change complete, execute:
+
+```powershell
+pytest -v
+```
+
+The expected current baseline is:
+
+```text
+64 passed
+0 failed
+```
+
+Then inspect:
+
+```powershell
+git status
+```
+
+and:
+
+```powershell
+git diff
+```
+
+The repository should contain only intentional changes.
+
+The project should be left in a reproducible state before development is paused again.
+
+That means:
+
+```text
+Application code
+        +
+Tests
+        +
+Documentation
+        +
+Git history
+        |
+        v
+Consistent Development Baseline
+```
+
+This baseline is more valuable than adding another half-finished feature merely because the roadmap has room for one.
+

@@ -2,52 +2,63 @@
 
 ## Purpose
 
-This document defines the **REST** **API** exposed by the PayGuard AI Mock Payment Gateway.
+This document defines the REST API exposed by the PayGuard AI Mock Payment Gateway.
 
-The **API** models a simplified payment transaction lifecycle covering:
+The API models a simplified payment transaction lifecycle covering:
 
 - Card issuance
 - Authorization
 - Capture
 - Settlement
-- Full and partial refunds
+- Full refunds
+- Partial refunds
 - Transaction lookup
 
-The **API** is implemented using FastAPI and is backed by the project's payment-domain, payment-service, repository, and state-machine layers.
+The API is implemented using FastAPI and is backed by the project's payment-domain, payment-service, repository, and state-machine layers.
 
-The **API** specification is also exposed automatically through FastAPI's OpenAPI implementation and is intended to become the source for future AI-assisted test-case generation.
+The API specification is also exposed automatically through FastAPI's OpenAPI implementation and is intended to become the source for future AI-assisted test-case generation.
 
 ---
 
-## Base URL
+# Base URL
 
 For local development:
 
-```text [http://localhost:**8000**/api/v1](http://localhost:**8000**/api/v1) ````
+```text
+http://localhost:8000/api/v1
+````
 
 FastAPI also exposes:
 
-```text [http://localhost:**8000**/docs](http://localhost:**8000**/docs) ```
+```text
+http://localhost:8000/docs
+```
 
 for Swagger UI and:
 
-```text [http://localhost:**8000**/openapi.json](http://localhost:**8000**/openapi.json) ```
+```text
+http://localhost:8000/openapi.json
+```
 
 for the raw OpenAPI specification.
 
-> **HTTPS** is not currently configured. The development **API** uses **HTTP**.
+> HTTPS is not currently configured. The development API uses HTTP.
 
 ---
 
 # Supported Card Networks
 
-The card issuance **API** currently validates the configured card-network values defined by the application's request model.
+The card issuance API currently validates the configured card-network values defined by the application's request model.
 
-The supported networks are:
+The currently documented supported networks are:
 
-```text **VISA** **MASTERCARD** **GENERIC** ```
+```text
+VISA
+MASTERCARD
+GENERIC
+```
 
-`**GENERIC**` provides a configurable third network for testing network-specific behavior.
+`GENERIC` provides a configurable third network for testing network-specific behavior.
 
 ---
 
@@ -57,38 +68,39 @@ The current transaction lifecycle is:
 
 ```text
     ┌───────────────┐
-    │  **AUTHORIZED**   │
+    │   AUTHORIZED  │
     └───────┬───────┘
-    │
-    ▼
+            │
+            ▼
     ┌───────────────┐
-    │   **CAPTURED**    │
+    │    CAPTURED   │
     └───────┬───────┘
-    │
-    ▼
+            │
+            ▼
     ┌───────────────┐
-    │    **SETTLED**    │
+    │    SETTLED    │
     └───────┬───────┘
-    │
-    ┌───────────┴───────────┐
-    │                       │
-    ▼                       ▼
-    ┌────────────────────┐    ┌────────────────┐
-    │ PARTIALLY_REFUNDED │    │    **REFUNDED**    │
-    └─────────┬──────────┘    └────────────────┘
-    │
-    ▼
-    ┌────────────────┐
-    │    **REFUNDED**    │
-    └────────────────┘
+            │
+      ┌─────┴─────────────┐
+      │                   │
+      ▼                   ▼
+┌──────────────────┐  ┌───────────────┐
+│PARTIALLY_REFUNDED│  │    REFUNDED   │
+└────────┬─────────┘  └───────────────┘
+         │
+         │ remaining amount refunded
+         ▼
+  ┌───────────────┐
+  │    REFUNDED   │
+  └───────────────┘
 ```
 
 A declined authorization is a terminal transaction state:
 
 ```text
-**AUTHORIZATION**
-    |
-    └──► **DECLINED**
+AUTHORIZATION
+      │
+      └──► DECLINED
 ```
 
 The state machine prevents invalid lifecycle transitions.
@@ -99,7 +111,9 @@ The state machine prevents invalid lifecycle transitions.
 
 ## Endpoint
 
-```http **POST** /api/v1/cards ```
+```http
+POST /api/v1/cards
+```
 
 ## Purpose
 
@@ -114,31 +128,53 @@ Creates a new virtual card record that can subsequently be used to authorize tra
 | `initial_balance` | number | Yes      | Initial available balance     |
 | `expiry_date`     | string | Yes      | Card expiry date              |
 
+Example request:
+
+```json
+{
+  "cardholder_name": "Atharva Garud",
+  "network": "VISA",
+  "initial_balance": 1000,
+  "expiry_date": "2029-12-31"
+}
+```
+
 The request model performs validation before the endpoint executes.
 
-## Response
+## Successful Response
 
-****HTTP** **201** Created**
+```text
+HTTP 201 Created
+```
 
 The response contains the created `Card` model.
 
-The generated card number is masked and follows the application's masked-card representation.
+The generated card number is masked according to the application's card representation.
 
 Example:
 
-```json { *card_number*: *****-****-****-**1234*** } ```
+```json
+{
+  "card_id": "e9fa7848-3e2c-424b-b14d-3001fca837be",
+  "card_number": "****-****-****-1234",
+  "cardholder_name": "Atharva Garud",
+  "network": "VISA",
+  "balance": 1000,
+  "expiry_date": "2029-12-31"
+}
+```
 
-The complete response schema is generated from the FastAPI/Pydantic `Card` model and should be treated as the authoritative response contract.
+The exact response schema generated by FastAPI/Pydantic should be treated as the authoritative response contract.
 
 ## Validation
 
-The current **API** tests verify:
+The API tests verify scenarios including:
 
-- Missing required fields
-- Invalid card network
-- Zero initial balance
-- Negative initial balance
-- Multiple card creation producing unique card identifiers
+* Missing required fields
+* Invalid card network
+* Zero initial balance
+* Negative initial balance
+* Multiple card creation producing unique identifiers
 
 ---
 
@@ -146,13 +182,15 @@ The current **API** tests verify:
 
 ## Endpoint
 
-```http **POST** /api/v1/transactions/authorize ```
+```http
+POST /api/v1/transactions/authorize
+```
 
 ## Purpose
 
 Attempts to authorize a payment against an active card.
 
-A successful authorization reserves the requested amount against the card's available balance and creates a transaction in the `**AUTHORIZED**` state.
+A successful authorization creates a transaction in the `AUTHORIZED` state and records the authorized amount.
 
 ## Request Body
 
@@ -162,39 +200,54 @@ A successful authorization reserves the requested amount against the card's avai
 | `amount`      | number | Yes      | Amount to authorize                  |
 | `merchant_id` | string | Yes      | Identifier of the merchant           |
 
+Example:
+
+```json
+{
+  "card_id": "e9fa7848-3e2c-424b-b14d-3001fca837be",
+  "amount": 50,
+  "merchant_id": "MERCHANT-001"
+}
+```
+
 ## Successful Response
 
-****HTTP** **200** OK**
+```text
+HTTP 200 OK
+```
 
 Example:
 
 ```json
 {
-    *transaction_id*: *transaction-id*,
-    *status*: *AUTHORIZED*,
-    *authorized_amount*: **100**
+  "transaction_id": "transaction-id",
+  "status": "AUTHORIZED",
+  "authorized_amount": 50
 }
 ```
 
 ## Declined Authorization
 
-Insufficient funds do not produce an **HTTP** 4xx response.
+Insufficient funds do not produce an HTTP 4xx response.
 
-Instead, the **API** creates a transaction with:
+Instead, the API creates a transaction with:
 
-```text status = **DECLINED** decline_reason = INSUFFICIENT_FUNDS ```
+```text
+status = DECLINED
+decline_reason = INSUFFICIENT_FUNDS
+```
 
 Example:
 
 ```json
 {
-    *transaction_id*: *transaction-id*,
-    *status*: *DECLINED*,
-    *decline_reason*: *INSUFFICIENT_FUNDS*
+  "transaction_id": "transaction-id",
+  "status": "DECLINED",
+  "decline_reason": "INSUFFICIENT_FUNDS"
 }
 ```
 
-This models the distinction between a successfully processed payment request that is declined by the payment domain and a malformed or invalid **API** request.
+This models the distinction between a valid payment request that is declined by the payment domain and a malformed or invalid API request.
 
 ## Error Cases
 
@@ -206,7 +259,7 @@ This models the distinction between a successfully processed payment request tha
 | Invalid request amount |         422 |
 | Zero amount            |         422 |
 
-Request-validation status codes are handled by FastAPI/Pydantic before the business logic executes.
+Request-validation errors are handled by FastAPI/Pydantic before the business logic executes.
 
 ---
 
@@ -214,11 +267,13 @@ Request-validation status codes are handled by FastAPI/Pydantic before the busin
 
 ## Endpoint
 
-```http **POST** /api/v1/transactions/{transaction_id}/capture ```
+```http
+POST /api/v1/transactions/{transaction_id}/capture
+```
 
 ## Purpose
 
-Captures an amount from an existing `**AUTHORIZED**` transaction.
+Captures an amount from an existing `AUTHORIZED` transaction.
 
 The capture amount cannot exceed the authorized amount.
 
@@ -236,15 +291,17 @@ The capture amount cannot exceed the authorized amount.
 
 ## Successful Response
 
-****HTTP** **200** OK**
+```text
+HTTP 200 OK
+```
 
 Example:
 
 ```json
 {
-    *transaction_id*: *transaction-id*,
-    *status*: *CAPTURED*,
-    *captured_amount*: **100**
+  "transaction_id": "transaction-id",
+  "status": "CAPTURED",
+  "captured_amount": 50
 }
 ```
 
@@ -254,9 +311,9 @@ The capture operation is delegated to the `PaymentService`.
 
 The service validates:
 
-- Transaction existence
-- Current transaction state
-- Capture amount against authorized amount
+* Transaction existence
+* Current transaction state
+* Capture amount against authorized amount
 
 ## Error Cases
 
@@ -268,7 +325,15 @@ The service validates:
 | Zero capture amount                   |         422 |
 | Negative capture amount               |         422 |
 
-The **API** tests currently verify successful capture, partial capture, excessive capture, nonexistent transactions, already-captured transactions, declined transactions, and zero-amount capture.
+The API tests verify scenarios including:
+
+* Successful capture
+* Partial capture
+* Capture exceeding authorization
+* Nonexistent transaction
+* Already-captured transaction
+* Declined transaction
+* Zero-amount capture
 
 ---
 
@@ -276,13 +341,15 @@ The **API** tests currently verify successful capture, partial capture, excessiv
 
 ## Endpoint
 
-```http **POST** /api/v1/transactions/{transaction_id}/settle ```
+```http
+POST /api/v1/transactions/{transaction_id}/settle
+```
 
 ## Purpose
 
-Moves a successfully captured transaction into the `**SETTLED**` state.
+Moves a successfully captured transaction into the `SETTLED` state.
 
-Settlement represents the completion of the simulated payment lifecycle after capture.
+Settlement represents completion of the simulated payment lifecycle after capture.
 
 ## Path Parameters
 
@@ -296,19 +363,21 @@ No request body is required.
 
 ## Successful Response
 
-****HTTP** **200** OK**
+```text
+HTTP 200 OK
+```
 
 Example:
 
 ```json
 {
-    *transaction_id*: *transaction-id*,
-    *status*: *SETTLED*,
-    *settled_at*: ***2026**-08-**12T07**:19:35.**023052**+00:00*
+  "transaction_id": "transaction-id",
+  "status": "SETTLED",
+  "settled_at": "2026-08-12T07:19:35.023052+00:00"
 }
 ```
 
-The settlement timestamp is generated using **UTC**.
+The settlement timestamp is generated using UTC.
 
 ## Business Rules
 
@@ -316,11 +385,15 @@ Settlement is delegated to the `PaymentService`.
 
 A transaction must currently be:
 
-```text **CAPTURED** ```
+```text
+CAPTURED
+```
 
 before it can transition to:
 
-```text **SETTLED** ```
+```text
+SETTLED
+```
 
 ## Error Cases
 
@@ -336,7 +409,9 @@ before it can transition to:
 
 ## Endpoint
 
-```http **POST** /api/v1/transactions/{transaction_id}/refund ```
+```http
+POST /api/v1/transactions/{transaction_id}/refund
+```
 
 ## Purpose
 
@@ -344,10 +419,10 @@ Refunds all or part of a settled transaction.
 
 The implementation supports:
 
-- Full refunds
-- Partial refunds
-- Multiple partial refunds
-- Partial refund followed by a final refund
+* Full refunds
+* Partial refunds
+* Multiple partial refunds
+* Partial refund followed by a final refund
 
 Refund processing is delegated to the `PaymentService`.
 
@@ -365,27 +440,29 @@ Refund processing is delegated to the `PaymentService`.
 
 ## Successful Response
 
-****HTTP** **200** OK**
+```text
+HTTP 200 OK
+```
 
-Example:
+Example full refund:
 
 ```json
 {
-    *transaction_id*: *transaction-id*,
-    *refund_id*: *refund-d7c3e15e*,
-    *status*: *REFUNDED*,
-    *remaining_balance*: 0
+  "transaction_id": "transaction-id",
+  "refund_id": "refund-d7c3e15e",
+  "status": "REFUNDED",
+  "remaining_balance": 0
 }
 ```
 
-For a partial refund:
+Example partial refund:
 
 ```json
 {
-    *transaction_id*: *transaction-id*,
-    *refund_id*: *refund-d7c3e15e*,
-    *status*: *PARTIALLY_REFUNDED*,
-    *remaining_balance*: 50
+  "transaction_id": "transaction-id",
+  "refund_id": "refund-d7c3e15e",
+  "status": "PARTIALLY_REFUNDED",
+  "remaining_balance": 50
 }
 ```
 
@@ -393,23 +470,31 @@ For a partial refund:
 
 A refund is allowed only when the transaction is:
 
-```text **SETTLED** ```
+```text
+SETTLED
+```
 
 or:
 
-```text PARTIALLY_REFUNDED ```
+```text
+PARTIALLY_REFUNDED
+```
 
-The total amount refunded cannot exceed the settled amount.
+The total refunded amount cannot exceed the settled amount.
 
 The transaction becomes:
 
-```text PARTIALLY_REFUNDED ```
+```text
+PARTIALLY_REFUNDED
+```
 
 while a refundable balance remains.
 
 Once the complete settled amount has been refunded, the transaction becomes:
 
-```text **REFUNDED** ```
+```text
+REFUNDED
+```
 
 ## Error Cases
 
@@ -422,7 +507,16 @@ Once the complete settled amount has been refunded, the transaction becomes:
 | Negative refund amount                     |         422 |
 | Fully refunded transaction                 |         409 |
 
-The current **API** test suite verifies full refunds, partial refunds, multiple partial refunds, excessive refunds, invalid transaction states, fully refunded transactions, zero refunds, and negative refunds.
+The API test suite verifies:
+
+* Full refunds
+* Partial refunds
+* Multiple partial refunds
+* Excessive refunds
+* Invalid transaction states
+* Fully refunded transactions
+* Zero refunds
+* Negative refunds
 
 ---
 
@@ -430,19 +524,21 @@ The current **API** test suite verifies full refunds, partial refunds, multiple 
 
 ## Endpoint
 
-```http **GET** /api/v1/transactions/{transaction_id} ```
+```http
+GET /api/v1/transactions/{transaction_id}
+```
 
 ## Purpose
 
 Retrieves the complete transaction object, including its current status and transaction history.
 
-This endpoint is intended to support:
+This endpoint supports:
 
-- **API** verification
-- Future Dashboard functionality
-- Transaction lifecycle inspection
-- Future test automation
-- Future AI failure analysis
+* API verification
+* Dashboard transaction visibility
+* Transaction lifecycle inspection
+* Future UI automation
+* Future AI failure analysis
 
 ## Path Parameters
 
@@ -452,22 +548,26 @@ This endpoint is intended to support:
 
 ## Successful Response
 
-****HTTP** **200** OK**
+```text
+HTTP 200 OK
+```
 
 The response is the application's `Transaction` model.
 
 The model contains transaction information such as:
 
-- Transaction identifier
-- Card identifier
-- Merchant identifier
-- Transaction status
-- Authorized amount
-- Captured amount
-- Settled amount
-- Refunded amount
-- Decline reason, where applicable
-- Transaction history
+* Transaction identifier
+* Card identifier
+* Merchant identifier
+* Transaction status
+* Authorized amount
+* Captured amount
+* Settled amount
+* Refunded amount
+* Decline reason, where applicable
+* Transaction history
+
+The transaction history provides the lifecycle events used by the dashboard to display the transaction progression.
 
 ## Error Cases
 
@@ -481,21 +581,31 @@ The model contains transaction information such as:
 
 ## Endpoint
 
-```http **GET** / ```
+```http
+GET /
+```
 
 ## Purpose
 
-Provides a basic application health response for local development.
+Provides a basic application availability response for local development.
 
 ## Successful Response
 
-****HTTP** **200** OK**
+```text
+HTTP 200 OK
+```
 
-```json { *message*: *PayGuard AI Mock Payment Gateway is running* } ```
+Example:
 
-This endpoint is currently a simple application availability check rather than a full dependency health check.
+```json
+{
+  "message": "PayGuard AI Mock Payment Gateway is running"
+}
+```
 
-A more comprehensive health/readiness model can be introduced when PostgreSQL, Docker services, and other external dependencies become part of the runtime architecture.
+This endpoint is currently a simple application availability check rather than a complete dependency health/readiness check.
+
+A more comprehensive health and readiness model can be introduced when PostgreSQL, Docker services, and other external dependencies become part of the runtime architecture.
 
 ---
 
@@ -503,7 +613,9 @@ A more comprehensive health/readiness model can be introduced when PostgreSQL, D
 
 The Mock Payment Gateway supports deterministic technical-failure simulation through the:
 
-```http X-Simulate-Failure ```
+```http
+X-Simulate-Failure
+```
 
 request header.
 
@@ -513,39 +625,69 @@ The feature exists to provide controlled failure scenarios for reliability testi
 
 ### TIMEOUT
 
-```http X-Simulate-Failure: **TIMEOUT** ```
+Request header:
 
-Returns:
-
-```text **HTTP** **504** Gateway Timeout ```
+```http
+X-Simulate-Failure: TIMEOUT
+```
 
 Response:
 
-```json { *detail*: *Simulated timeout occurred* } ```
+```text
+HTTP 504 Gateway Timeout
+```
+
+Example:
+
+```json
+{
+  "detail": "Simulated timeout occurred"
+}
+```
 
 ### NETWORK_ERROR
 
-```http X-Simulate-Failure: NETWORK_ERROR ```
+Request header:
 
-Returns:
-
-```text **HTTP** **502** Bad Gateway ```
+```http
+X-Simulate-Failure: NETWORK_ERROR
+```
 
 Response:
 
-```json { *detail*: *Simulated network error* } ```
+```text
+HTTP 502 Bad Gateway
+```
+
+Example:
+
+```json
+{
+  "detail": "Simulated network error"
+}
+```
 
 ### INVALID_RESPONSE
 
-```http X-Simulate-Failure: INVALID_RESPONSE ```
+Request header:
 
-Returns:
-
-```text **HTTP** **500** Internal Server Error ```
+```http
+X-Simulate-Failure: INVALID_RESPONSE
+```
 
 Response:
 
-```json { *detail*: *Simulated invalid response* } ```
+```text
+HTTP 500 Internal Server Error
+```
+
+Example:
+
+```json
+{
+  "detail": "Simulated invalid response"
+}
+```
 
 These failures are deterministic and therefore suitable for repeatable automated testing.
 
@@ -555,52 +697,52 @@ These failures are deterministic and therefore suitable for repeatable automated
 
 FastAPI and Pydantic validate request payloads before payment-domain logic is executed.
 
-This provides a distinction between:
+This provides a distinction between request-validation failures and payment business-rule failures.
 
-### Request Validation Failure
-
-Examples:
-
-- Missing required field
-- Invalid field type
-- Invalid numeric constraint
-- Invalid enum/network value
-
-These are handled by the **API** validation layer.
-
-### Payment Business Rule Failure
+## Request Validation Failure
 
 Examples:
 
-- Insufficient funds
-- Capture exceeding authorization
-- Refund exceeding remaining refundable amount
-- Settlement attempted before capture
-- Refund attempted before settlement
+* Missing required field
+* Invalid field type
+* Invalid numeric constraint
+* Invalid enum/network value
 
-These are handled by the payment-domain/service layer and translated into appropriate **HTTP** responses.
+These are handled by the API validation layer.
 
-This separation is intentional:
+## Payment Business Rule Failure
+
+Examples:
+
+* Insufficient funds
+* Capture exceeding authorization
+* Refund exceeding remaining refundable amount
+* Settlement attempted before capture
+* Refund attempted before settlement
+
+These are handled by the payment-domain/service layer and translated into appropriate HTTP responses.
+
+The intended flow is:
 
 ```text
-**HTTP** Request
-    |
-    v
-### Pydantic Validation
-    |
-    v
-**API** Layer
-    |
-    v
-### Payment Service
-    |
-    v
+HTTP Request
+     |
+     v
+Pydantic Validation
+     |
+     v
+API Layer
+     |
+     v
+Payment Service
+     |
+     v
 Domain Rules / State Machine
-    |
-    v
+     |
+     v
 Repository
-    |
-    v
+     |
+     v
 Storage
 ```
 
@@ -608,7 +750,7 @@ Storage
 
 # HTTP Status Code Conventions
 
-The current **API** follows these conventions:
+The current API follows these conventions:
 
 | Status | Meaning in PayGuard AI                                       |
 | -----: | ------------------------------------------------------------ |
@@ -622,7 +764,7 @@ The current **API** follows these conventions:
 |    502 | Simulated network failure                                    |
 |    504 | Simulated timeout                                            |
 
-The exact validation response body for `**422**` responses is generated by FastAPI/Pydantic and should not be duplicated manually in this document.
+The exact validation response body for `422` responses is generated by FastAPI/Pydantic and should not be duplicated manually in this document.
 
 ---
 
@@ -631,37 +773,37 @@ The exact validation response body for `**422**` responses is generated by FastA
 ## Successful Payment
 
 ```text
-## Issue Card
+Issue Card
     |
     v
-## Authorize
+Authorize
     |
     v
-## Capture
+Capture
     |
     v
-## Settle
+Settle
     |
     v
-## Refund (optional)
+Refund (optional)
 ```
 
 Example lifecycle:
 
 ```text
-**CARD** **CREATED**
-    |
-    v
-**AUTHORIZED**
-    |
-    v
-**CAPTURED**
-    |
-    v
-**SETTLED**
-    |
-    v
-**REFUNDED**
+CARD CREATED
+     |
+     v
+AUTHORIZED
+     |
+     v
+CAPTURED
+     |
+     v
+SETTLED
+     |
+     v
+REFUNDED
 ```
 
 ---
@@ -669,7 +811,7 @@ Example lifecycle:
 ## Partial Refund Lifecycle
 
 ```text
-**SETTLED**
+SETTLED
     |
     v
 PARTIALLY_REFUNDED
@@ -678,7 +820,7 @@ PARTIALLY_REFUNDED
 PARTIALLY_REFUNDED
     |
     v
-**REFUNDED**
+REFUNDED
 ```
 
 The transaction remains refundable until the total refunded amount reaches the settled amount.
@@ -687,7 +829,14 @@ The transaction remains refundable until the total refunded amount reaches the s
 
 ## Declined Payment
 
-```text **CARD** | v **AUTHORIZATION** | +---- insufficient funds ----> **DECLINED** ```
+```text
+CARD
+ |
+ v
+AUTHORIZATION
+ |
+ +---- insufficient funds ----> DECLINED
+```
 
 A declined authorization is stored as a transaction rather than treated as an unavailable resource or server failure.
 
@@ -695,18 +844,18 @@ A declined authorization is stored as a transaction rather than treated as an un
 
 # API-to-Service Architecture
 
-The **API** layer is intentionally kept separate from payment business logic.
+The API layer is intentionally kept separate from payment business logic.
 
 ```text
 ┌──────────────────────────────┐
-│         FastAPI **API**          │
+│          FastAPI API         │
 │                              │
 │ Request validation           │
-│ **HTTP** responses               │
-│ **HTTP** error mapping           │
+│ HTTP responses               │
+│ HTTP error mapping           │
 └──────────────┬───────────────┘
-    │
-    ▼
+               |
+               v
 ┌──────────────────────────────┐
 │       PaymentService         │
 │                              │
@@ -714,8 +863,8 @@ The **API** layer is intentionally kept separate from payment business logic.
 │ Settlement                   │
 │ Refund                       │
 └──────────────┬───────────────┘
-    │
-    ▼
+               |
+               v
 ┌──────────────────────────────┐
 │       Domain / State         │
 │                              │
@@ -723,16 +872,16 @@ The **API** layer is intentionally kept separate from payment business logic.
 │ Business rules               │
 │ Domain exceptions            │
 └──────────────┬───────────────┘
-    │
-    ▼
+               |
+               v
 ┌──────────────────────────────┐
 │    Transaction Repository    │
 └──────────────┬───────────────┘
-    │
-    ▼
+               |
+               v
 ┌──────────────────────────────┐
 │       Current Storage        │
-│        In-memory             │
+│         In-memory            │
 └──────────────────────────────┘
 ```
 
@@ -742,9 +891,9 @@ This architecture provides a migration path toward persistent database-backed st
 
 # Current API Test Coverage
 
-The **API** specification is backed by an automated regression suite.
+The API specification is backed by an automated regression suite.
 
-Current **API** coverage includes:
+Current API coverage includes:
 
 | Endpoint / Capability |  Tests |
 | --------------------- | -----: |
@@ -755,21 +904,29 @@ Current **API** coverage includes:
 | Settlement            |      6 |
 | **Total**             | **36** |
 
-The current **API** suite verifies:
+The current API suite verifies:
 
-- Positive scenarios
-- Negative scenarios
-- Boundary conditions
-- Invalid transaction states
-- Partial captures
-- Partial refunds
-- Full refunds
-- Insufficient funds
-- Simulated technical failures
+* Positive scenarios
+* Negative scenarios
+* Boundary conditions
+* Invalid transaction states
+* Partial captures
+* Partial refunds
+* Full refunds
+* Insufficient funds
+* Simulated technical failures
 
 The complete project regression suite currently contains:
 
-```text 36 **API** tests 14 Payment Service tests ## 14 State Machine tests 64 total tests 64 passed 0 failed ```
+```text
+36 API tests
+14 Payment Service tests
+14 State Machine tests
+-----------------------
+64 total tests
+64 passed
+0 failed
+```
 
 ---
 
@@ -779,13 +936,17 @@ FastAPI automatically generates the OpenAPI specification from the implemented r
 
 Interactive documentation:
 
-```text [http://localhost:**8000**/docs](http://localhost:**8000**/docs) ```
+```text
+http://localhost:8000/docs
+```
 
 Raw OpenAPI document:
 
-```text [http://localhost:**8000**/openapi.json](http://localhost:**8000**/openapi.json) ```
+```text
+http://localhost:8000/openapi.json
+```
 
-The generated OpenAPI document should be treated as the machine-readable **API** contract.
+The generated OpenAPI document should be treated as the machine-readable API contract.
 
 Future AI test-case generation can consume this specification to identify additional scenarios.
 
@@ -793,40 +954,42 @@ Future AI test-case generation can consume this specification to identify additi
 
 # Future API Enhancements
 
-The current **API** intentionally represents a simplified payment gateway. The following capabilities are candidates for future iterations:
+The current API intentionally represents a simplified payment gateway.
 
-- Idempotency keys
-- Request correlation IDs
-- Authentication and authorization
-- Rate limiting
-- Currency support
-- Explicit monetary precision handling
-- Transaction timestamps
-- Merchant validation
-- Card expiry validation
-- Transaction expiration
-- Authorization reversal/void
-- Multiple capture support
-- Refund identifiers as persistent entities
-- Persistent refund records
-- Webhook/event simulation
-- PostgreSQL-backed persistence
-- Optimistic or pessimistic concurrency controls
-- Audit logging
-- Health and readiness endpoints
-- Structured error codes
+The following capabilities are candidates for future iterations:
 
-These capabilities should be introduced incrementally rather than added merely to make the **API** specification look impressive. Payment software already has enough opportunities for accidental complexity without manufacturing more of it.
+* Idempotency keys
+* Request correlation IDs
+* Authentication and authorization
+* Rate limiting
+* Currency support
+* Explicit monetary precision handling
+* Transaction timestamps
+* Merchant validation
+* Card expiry validation
+* Transaction expiration
+* Authorization reversal/void
+* Multiple capture support
+* Refund identifiers as persistent entities
+* Persistent refund records
+* Webhook/event simulation
+* PostgreSQL-backed persistence
+* Optimistic or pessimistic concurrency controls
+* Audit logging
+* Health and readiness endpoints
+* Structured error codes
+
+These capabilities should be introduced incrementally rather than added merely to increase the apparent complexity of the API.
 
 ---
 
 # API Design Principles
 
-The current **API** follows these principles:
+The current API follows these principles.
 
-## 1. Payment-domain failures are not treated as generic server failures
+## 1. Payment-domain failures are not generic server failures
 
-For example, insufficient funds result in a valid `**DECLINED**` transaction rather than a server error.
+For example, insufficient funds result in a valid `DECLINED` transaction rather than a server error.
 
 ## 2. Transaction state controls allowed operations
 
@@ -838,11 +1001,15 @@ Payment operations are delegated to the payment service and domain layer where a
 
 ## 4. Validation occurs at the API boundary
 
-Malformed or invalid request payloads are rejected before they reach the payment-domain logic.
+Malformed or invalid request payloads are rejected before they reach payment-domain logic.
 
 ## 5. The API remains deterministic for testing
 
 Failure injection and controlled test data allow repeatable scenarios for automated regression and future AI-assisted failure analysis.
+
+## 6. Transaction history remains observable
+
+Transaction lifecycle events are exposed through transaction lookup so that downstream consumers such as the dashboard and future automation can inspect the payment lifecycle.
 
 ---
 
@@ -865,6 +1032,7 @@ Failure injection and controlled test data allow repeatable scenarios for automa
 | Payment state machine      | Implemented |
 | Payment service layer      | Implemented |
 | Repository abstraction     | Implemented |
+| In-memory persistence      | Implemented |
 | Persistent database        | Planned     |
 | Idempotency                | Planned     |
 | Authentication             | Planned     |
@@ -872,3 +1040,64 @@ Failure injection and controlled test data allow repeatable scenarios for automa
 | Webhooks                   | Planned     |
 | AI test-case generation    | Planned     |
 | AI Root Cause Analysis     | Planned     |
+
+---
+
+# Current API Validation Summary
+
+The currently verified transaction flow is:
+
+```text
+Card Creation
+     |
+     | HTTP 201
+     v
+Authorization
+     |
+     | HTTP 200
+     v
+Capture
+     |
+     | HTTP 200
+     v
+Settlement
+     |
+     | HTTP 200
+     v
+Refund
+     |
+     | HTTP 200
+     v
+Transaction Lifecycle Completed
+```
+
+The transaction lifecycle exposed by the application is therefore:
+
+```text
+AUTHORIZED
+     |
+     v
+CAPTURED
+     |
+     v
+SETTLED
+     |
+     v
+REFUNDED
+```
+
+Partial refunds introduce the intermediate state:
+
+```text
+SETTLED
+     |
+     v
+PARTIALLY_REFUNDED
+     |
+     v
+REFUNDED
+```
+
+The API currently provides the functional payment flow required for the next reliability-focused development phase.
+
+The next architectural concerns are expected to focus on persistence, idempotency, monetary precision, concurrency, durable transaction history, and reliability rather than adding more payment endpoints prematurely.
