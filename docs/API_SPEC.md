@@ -13,10 +13,12 @@ The API models a simplified payment transaction lifecycle covering:
 - Full refunds
 - Partial refunds
 - Transaction lookup
+- Idempotent authorization
+- Idempotent capture
 
-The API is implemented using FastAPI and is backed by the project's payment-domain, payment-service, repository, and state-machine layers.
+The API is implemented using FastAPI and is backed by the project's payment-domain, payment-service, repository, state-machine, audit, and storage layers.
 
-The API specification is also exposed automatically through FastAPI's OpenAPI implementation and is intended to become the source for future AI-assisted test-case generation.
+The API specification is also exposed automatically through FastAPI's OpenAPI implementation.
 
 ---
 
@@ -48,9 +50,9 @@ for the raw OpenAPI specification.
 
 # Supported Card Networks
 
-The card issuance API currently validates the configured card-network values defined by the application's request model.
+The card issuance API validates the configured card-network values defined by the application's request model.
 
-The currently documented supported networks are:
+The currently supported networks are:
 
 ```text
 VISA
@@ -81,9 +83,9 @@ The current transaction lifecycle is:
     │    SETTLED    │
     └───────┬───────┘
             │
-      ┌─────┴─────────────┐
-      │                   │
-      ▼                   ▼
+       ┌────┴──────────────┐
+       │                   │
+       ▼                   ▼
 ┌──────────────────┐  ┌───────────────┐
 │PARTIALLY_REFUNDED│  │    REFUNDED   │
 └────────┬─────────┘  └───────────────┘
@@ -134,8 +136,8 @@ Example request:
 {
   "cardholder_name": "Atharva Garud",
   "network": "VISA",
-  "initial_balance": 1000,
-  "expiry_date": "2029-12-31"
+  "initial_balance": 5000,
+  "expiry_date": "12/28"
 }
 ```
 
@@ -159,8 +161,9 @@ Example:
   "card_number": "****-****-****-1234",
   "cardholder_name": "Atharva Garud",
   "network": "VISA",
-  "balance": 1000,
-  "expiry_date": "2029-12-31"
+  "balance": 5000,
+  "expiry_date": "12/28",
+  "status": "ACTIVE"
 }
 ```
 
@@ -175,6 +178,7 @@ The API tests verify scenarios including:
 * Zero initial balance
 * Negative initial balance
 * Multiple card creation producing unique identifiers
+* Successful card creation
 
 ---
 
@@ -263,7 +267,101 @@ Request-validation errors are handled by FastAPI/Pydantic before the business lo
 
 ---
 
-# 3. Capture
+# 3. Authorization Idempotency
+
+Authorization supports the `Idempotency-Key` HTTP request header.
+
+## Header
+
+```http
+Idempotency-Key: auth-idempotency-001
+```
+
+## Purpose
+
+The idempotency mechanism prevents a client from accidentally creating multiple authorization operations when the same request is retried.
+
+The system stores:
+
+* The idempotency key
+* A deterministic request fingerprint
+* The original API response
+
+## Same Key + Same Request
+
+Repeating an authorization request using the same idempotency key and the same request payload returns the original response.
+
+Example:
+
+```http
+POST /api/v1/transactions/authorize
+Idempotency-Key: auth-idempotency-001
+```
+
+Request:
+
+```json
+{
+  "card_id": "card-id",
+  "amount": 1000,
+  "merchant_id": "merchant-001"
+}
+```
+
+The second identical request returns the same transaction response.
+
+The transaction is not created twice.
+
+## Same Key + Different Request
+
+Reusing an idempotency key with a different request payload is rejected.
+
+Response:
+
+```text
+HTTP 409 Conflict
+```
+
+Example response:
+
+```json
+{
+  "detail": "Idempotency-Key has already been used for a different authorization request"
+}
+```
+
+## Different Keys
+
+Different idempotency keys represent separate operations.
+
+For example:
+
+```text
+auth-idempotency-004
+auth-idempotency-005
+```
+
+can create separate authorization transactions even when the request payload is otherwise identical.
+
+## No Idempotency Key
+
+Requests without an `Idempotency-Key` preserve the existing non-idempotent behavior.
+
+Repeated requests without a key therefore create separate authorization operations.
+
+## Idempotency Test Coverage
+
+The API regression suite verifies:
+
+* Same key + same request replays the original response
+* Same key does not double-charge the card
+* Same key + different request returns `409`
+* Different keys create separate operations
+* Requests without a key preserve non-idempotent behavior
+
+---
+
+# 4. Capture
 
 ## Endpoint
 
@@ -337,7 +435,48 @@ The API tests verify scenarios including:
 
 ---
 
-# 4. Settlement
+# 5. Capture Idempotency
+
+Capture operations support idempotency using the `Idempotency-Key` HTTP request header.
+
+Example:
+
+```http
+POST /api/v1/transactions/{transaction_id}/capture
+Idempotency-Key: capture-idempotency-001
+```
+
+The same key and identical request can safely be retried without performing the capture twice.
+
+The idempotency mechanism distinguishes:
+
+```text
+same key + same request
+```
+
+from:
+
+```text
+same key + different request
+```
+
+A key reused for a different capture request results in:
+
+```text
+HTTP 409 Conflict
+```
+
+The capture regression tests verify:
+
+* Replaying the same capture request
+* Preventing duplicate capture
+* Rejecting the same key for a different request
+* Allowing separate operations with different idempotency keys
+* Preserving existing behavior when no idempotency key is supplied
+
+---
+
+# 6. Settlement
 
 ## Endpoint
 
@@ -403,9 +542,11 @@ SETTLED
 | Transaction not in `CAPTURED` state |         409 |
 | Already settled transaction         |         409 |
 
+The settlement tests verify successful settlement, invalid states, nonexistent transactions, repeated settlement, and simulated technical failures.
+
 ---
 
-# 5. Refund
+# 7. Refund
 
 ## Endpoint
 
@@ -520,7 +661,7 @@ The API test suite verifies:
 
 ---
 
-# 6. Transaction Lookup
+# 8. Transaction Lookup
 
 ## Endpoint
 
@@ -537,7 +678,7 @@ This endpoint supports:
 * API verification
 * Dashboard transaction visibility
 * Transaction lifecycle inspection
-* Future UI automation
+* UI automation
 * Future AI failure analysis
 
 ## Path Parameters
@@ -565,9 +706,10 @@ The model contains transaction information such as:
 * Settled amount
 * Refunded amount
 * Decline reason, where applicable
+* Transaction creation timestamp
 * Transaction history
 
-The transaction history provides the lifecycle events used by the dashboard to display the transaction progression.
+The transaction history provides the lifecycle events used by the dashboard to display transaction progression.
 
 ## Error Cases
 
@@ -577,7 +719,52 @@ The transaction history provides the lifecycle events used by the dashboard to d
 
 ---
 
-# 7. Health / Root Endpoint
+# 9. Transaction Collection
+
+The dashboard requires a collection-level transaction endpoint to display current gateway activity.
+
+## Endpoint
+
+```http
+GET /api/v1/transactions
+```
+
+## Purpose
+
+Returns the transactions currently stored by the application.
+
+The endpoint is consumed by the dashboard Transactions page to:
+
+* Display transaction activity
+* Calculate transaction counts
+* Display transaction status
+* Display transaction amounts
+* Allow users to select transactions
+* Open transaction lifecycle details
+
+The frontend sorts returned transactions by creation time so the newest transactions appear first.
+
+## Empty Response
+
+When no transactions exist, the endpoint returns an empty collection.
+
+Example:
+
+```json
+[]
+```
+
+The dashboard represents this condition using its:
+
+```text
+No transactions yet
+```
+
+empty state.
+
+---
+
+# 10. Health / Root Endpoint
 
 ## Endpoint
 
@@ -719,6 +906,7 @@ Examples:
 * Refund exceeding remaining refundable amount
 * Settlement attempted before capture
 * Refund attempted before settlement
+* Card inactive
 
 These are handled by the payment-domain/service layer and translated into appropriate HTTP responses.
 
@@ -745,6 +933,64 @@ Repository
      v
 Storage
 ```
+
+---
+
+# Idempotency Architecture
+
+Idempotency records are maintained by the application's storage layer.
+
+Each record contains:
+
+```text
+Idempotency-Key
+      |
+      +---- request fingerprint
+      |
+      +---- original response
+```
+
+The storage implementation maintains these records separately from card and transaction state.
+
+This allows the API to distinguish:
+
+```text
+same key + same request
+```
+
+from:
+
+```text
+same key + different request
+```
+
+The original response is stored defensively so callers cannot mutate the persisted idempotency record accidentally.
+
+Idempotency currently covers authorization and capture operations.
+
+---
+
+# Audit Events
+
+The application maintains a separate audit-event storage collection.
+
+Audit events are stored independently from payment transactions and are intended to represent operational and security history.
+
+The storage layer uses defensive copies when persisting and retrieving audit events so callers cannot mutate stored audit records through external references.
+
+The audit test suite verifies:
+
+* Authorization audit events
+* Declined authorization audit events
+* Capture audit events
+* Persistence of audit events
+* Audit timestamps
+* Transaction-based audit lookup
+* Correlation-ID-based audit lookup
+* Failed-operation audit events
+* Audit events without raw sensitive payment payloads
+
+Raw card numbers must not be included in audit-event payloads.
 
 ---
 
@@ -853,12 +1099,15 @@ The API layer is intentionally kept separate from payment business logic.
 │ Request validation           │
 │ HTTP responses               │
 │ HTTP error mapping           │
+│ Idempotency handling         │
+│ Failure injection            │
 └──────────────┬───────────────┘
                |
                v
 ┌──────────────────────────────┐
 │       PaymentService         │
 │                              │
+│ Authorization                │
 │ Capture                      │
 │ Settlement                   │
 │ Refund                       │
@@ -875,13 +1124,20 @@ The API layer is intentionally kept separate from payment business logic.
                |
                v
 ┌──────────────────────────────┐
-│    Transaction Repository    │
+│       Repositories           │
+│                              │
+│ Card repository              │
+│ Transaction repository       │
 └──────────────┬───────────────┘
                |
                v
 ┌──────────────────────────────┐
 │       Current Storage        │
-│         In-memory            │
+│                              │
+│ Cards                        │
+│ Transactions                 │
+│ Audit events                 │
+│ Idempotency records          │
 └──────────────────────────────┘
 ```
 
@@ -889,44 +1145,57 @@ This architecture provides a migration path toward persistent database-backed st
 
 ---
 
-# Current API Test Coverage
+# Current Automated Test Coverage
 
-The API specification is backed by an automated regression suite.
+The project currently has an automated regression suite covering:
 
-Current API coverage includes:
+* API tests
+* End-to-end Playwright tests
+* Unit tests
+* Payment service tests
+* State-machine tests
+* Audit service tests
+* Monetary validation tests
 
-| Endpoint / Capability |  Tests |
-| --------------------- | -----: |
-| Authorization         |      7 |
-| Capture               |      7 |
-| Card Issuance         |      6 |
-| Refund                |     10 |
-| Settlement            |      6 |
-| **Total**             | **36** |
-
-The current API suite verifies:
-
-* Positive scenarios
-* Negative scenarios
-* Boundary conditions
-* Invalid transaction states
-* Partial captures
-* Partial refunds
-* Full refunds
-* Insufficient funds
-* Simulated technical failures
-
-The complete project regression suite currently contains:
+The current full regression run reports:
 
 ```text
-36 API tests
-14 Payment Service tests
-14 State Machine tests
------------------------
-64 total tests
-64 passed
+96 total tests
+96 passed
 0 failed
 ```
+
+## API Coverage
+
+The API suite covers:
+
+* Card issuance
+* Authorization
+* Authorization idempotency
+* Capture
+* Capture idempotency
+* Settlement
+* Refund
+* Audit behavior
+* Simulated technical failures
+* Boundary conditions
+* Invalid states
+* Request validation
+
+## End-to-End Coverage
+
+The current E2E suite covers:
+
+* Dashboard loading
+* Card issuance through the UI
+* Transactions page loading
+* Transactions empty state
+* Authorized transaction visibility
+* Transaction merchant visibility
+* Transaction status visibility
+* Transaction lifecycle dialog opening and closing
+
+The E2E tests use Playwright Page Objects and API-backed fixtures to create deterministic transaction state.
 
 ---
 
@@ -948,7 +1217,40 @@ http://localhost:8000/openapi.json
 
 The generated OpenAPI document should be treated as the machine-readable API contract.
 
-Future AI test-case generation can consume this specification to identify additional scenarios.
+Future AI-assisted test generation can consume this specification to identify additional scenarios.
+
+---
+
+# Current API Capabilities
+
+| Capability                 | Status      |
+| -------------------------- | ----------- |
+| Card issuance              | Implemented |
+| Authorization              | Implemented |
+| Authorization idempotency  | Implemented |
+| Capture                    | Implemented |
+| Capture idempotency        | Implemented |
+| Settlement                 | Implemented |
+| Full refund                | Implemented |
+| Partial refund             | Implemented |
+| Transaction lookup         | Implemented |
+| Transaction collection     | Implemented |
+| Simulated timeout          | Implemented |
+| Simulated network error    | Implemented |
+| Simulated invalid response | Implemented |
+| OpenAPI generation         | Implemented |
+| Swagger UI                 | Implemented |
+| Payment state machine      | Implemented |
+| Payment service layer      | Implemented |
+| Repository abstraction     | Implemented |
+| In-memory persistence      | Implemented |
+| Audit event persistence    | Implemented |
+| Persistent database        | Planned     |
+| Authentication             | Planned     |
+| Rate limiting              | Planned     |
+| Webhooks                   | Planned     |
+| AI test-case generation    | Planned     |
+| AI Root Cause Analysis     | Planned     |
 
 ---
 
@@ -958,26 +1260,24 @@ The current API intentionally represents a simplified payment gateway.
 
 The following capabilities are candidates for future iterations:
 
-* Idempotency keys
-* Request correlation IDs
+* Persistent PostgreSQL-backed storage
 * Authentication and authorization
 * Rate limiting
+* Request correlation IDs
 * Currency support
 * Explicit monetary precision handling
-* Transaction timestamps
 * Merchant validation
 * Card expiry validation
 * Transaction expiration
 * Authorization reversal/void
 * Multiple capture support
-* Refund identifiers as persistent entities
-* Persistent refund records
+* Persistent refund entities
 * Webhook/event simulation
-* PostgreSQL-backed persistence
 * Optimistic or pessimistic concurrency controls
-* Audit logging
-* Health and readiness endpoints
 * Structured error codes
+* Comprehensive health and readiness endpoints
+* Expanded AI-assisted test-case generation
+* AI Root Cause Analysis
 
 These capabilities should be introduced incrementally rather than added merely to increase the apparent complexity of the API.
 
@@ -1003,43 +1303,23 @@ Payment operations are delegated to the payment service and domain layer where a
 
 Malformed or invalid request payloads are rejected before they reach payment-domain logic.
 
-## 5. The API remains deterministic for testing
+## 5. Idempotency prevents duplicate operations
+
+Operations that support idempotency can safely replay the original result when clients retry an identical request.
+
+A reused key with a different request is rejected rather than silently creating a different operation.
+
+## 6. The API remains deterministic for testing
 
 Failure injection and controlled test data allow repeatable scenarios for automated regression and future AI-assisted failure analysis.
 
-## 6. Transaction history remains observable
+## 7. Transaction history remains observable
 
-Transaction lifecycle events are exposed through transaction lookup so that downstream consumers such as the dashboard and future automation can inspect the payment lifecycle.
+Transaction lifecycle events are exposed through transaction lookup so that downstream consumers such as the dashboard and future automation can inspect payment progression.
 
----
+## 8. Sensitive payment information is not exposed unnecessarily
 
-# Current API Status
-
-| Capability                 | Status      |
-| -------------------------- | ----------- |
-| Card issuance              | Implemented |
-| Authorization              | Implemented |
-| Capture                    | Implemented |
-| Settlement                 | Implemented |
-| Full refund                | Implemented |
-| Partial refund             | Implemented |
-| Transaction lookup         | Implemented |
-| Simulated timeout          | Implemented |
-| Simulated network error    | Implemented |
-| Simulated invalid response | Implemented |
-| OpenAPI generation         | Implemented |
-| Swagger UI                 | Implemented |
-| Payment state machine      | Implemented |
-| Payment service layer      | Implemented |
-| Repository abstraction     | Implemented |
-| In-memory persistence      | Implemented |
-| Persistent database        | Planned     |
-| Idempotency                | Planned     |
-| Authentication             | Planned     |
-| Rate limiting              | Planned     |
-| Webhooks                   | Planned     |
-| AI test-case generation    | Planned     |
-| AI Root Cause Analysis     | Planned     |
+Card numbers are represented in masked form, and audit events must not contain raw card numbers.
 
 ---
 
@@ -1071,7 +1351,7 @@ Refund
 Transaction Lifecycle Completed
 ```
 
-The transaction lifecycle exposed by the application is therefore:
+The transaction lifecycle exposed by the application is:
 
 ```text
 AUTHORIZED
@@ -1098,6 +1378,30 @@ PARTIALLY_REFUNDED
 REFUNDED
 ```
 
-The API currently provides the functional payment flow required for the next reliability-focused development phase.
+Declined authorization follows:
 
-The next architectural concerns are expected to focus on persistence, idempotency, monetary precision, concurrency, durable transaction history, and reliability rather than adding more payment endpoints prematurely.
+```text
+AUTHORIZED REQUEST
+       |
+       | insufficient funds
+       v
+   DECLINED
+```
+
+The API currently provides the functional payment flow required for the reliability-focused development phase.
+
+The next architectural concerns should focus on:
+
+* Persistent storage
+* Concurrency
+* Durable transaction history
+* Monetary precision
+* Authentication
+* Rate limiting
+* Reliability
+* Expanded automated testing
+* AI-assisted failure analysis
+
+rather than adding more payment endpoints prematurely.
+
+

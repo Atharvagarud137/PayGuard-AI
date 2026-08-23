@@ -2,15 +2,31 @@
 
 ## Product Overview
 
-**PayGuard AI** is a portfolio project that combines payment-domain software engineering, automated testing, reliability engineering, and applied AI.
+**PayGuard AI** is a portfolio project that combines payment-domain software engineering, automated testing, reliability engineering, frontend test automation, and applied AI.
 
-The project simulates a payment gateway using FastAPI and validates its behavior through automated tests. The architecture separates the **API** layer from payment business logic through a Payment Service, transaction repository, domain exceptions, and a transaction state machine.
+The project simulates a payment gateway using FastAPI and validates its behavior through layered automated tests. The architecture separates the **API** layer from payment business logic through a Payment Service, transaction repository, domain exceptions, transaction state machine, and storage abstraction.
 
-The longer-term objective is to evolve this foundation into an enterprise-style payment testing platform incorporating persistent storage, reliability controls, UI automation, CI/CD, observability, and AI-assisted failure analysis and test generation.
+The current implementation includes:
+
+- Mock payment gateway APIs
+- Card issuance
+- Authorization
+- Capture
+- Settlement
+- Full and partial refunds
+- Transaction history/events
+- Idempotency handling
+- Deterministic failure simulation
+- In-memory persistence
+- API and service-layer testing
+- Browser-based end-to-end testing with Playwright
+- Dashboard and Transactions UI validation
+
+The longer-term objective is to evolve this foundation into an enterprise-oriented payment testing platform incorporating durable persistence, stronger reliability controls, CI/CD, observability, and AI-assisted failure analysis and test generation.
 
 The project is intended to demonstrate how modern QA engineering practices can be applied to a FinTech/payment system while using AI as an augmentation layer rather than a replacement for conventional engineering and testing.
 
-The current implementation intentionally stops at the payment-domain and automated-regression foundation. The next strategic priority is **payment reliability and persistence**, particularly PostgreSQL, monetary precision, idempotency, concurrency, and durable transaction history.
+The current implementation has progressed beyond the initial payment-domain foundation. The immediate engineering priority is now **payment reliability and persistence**, particularly PostgreSQL persistence, stronger transaction consistency, concurrency controls, durable audit history, and reliability-focused integration testing.
 
 ---
 
@@ -25,7 +41,7 @@ PayGuard AI addresses this problem through two complementary approaches:
 1. **Strong payment-domain test automation** that validates transaction behavior, business rules, lifecycle transitions, boundary conditions, and failure scenarios.
 2. **AI-assisted engineering capabilities** that can eventually analyze failures and suggest additional test scenarios.
 
-The project deliberately establishes a reliable payment-domain foundation before introducing AI capabilities.
+The project deliberately establishes a reliable payment-domain and automation foundation before introducing advanced AI capabilities.
 
 The current implementation therefore prioritizes:
 
@@ -37,9 +53,11 @@ The current implementation therefore prioritizes:
 - Positive, negative, and boundary testing
 - Deterministic failure simulation
 - Repository-based persistence abstraction
+- Idempotency behavior
+- Browser-based E2E testing
 - Regression stability
 
-AI capabilities remain a future augmentation layer and will only be introduced after the underlying payment behavior and reliability model are sufficiently mature.
+AI capabilities remain a future augmentation layer and should only be introduced after the underlying payment behavior and reliability model are sufficiently mature.
 
 ---
 
@@ -48,15 +66,16 @@ AI capabilities remain a future augmentation layer and will only be introduced a
 | Goal | Description | Status |
 | --- | --- | --- |
 | Demonstrate payment-domain engineering | Model card and transaction lifecycles with explicit business rules | Implemented |
-| Demonstrate test automation expertise | Build layered automated tests covering domain, service, and API behavior | Implemented |
+| Demonstrate test automation expertise | Build layered automated tests covering domain, service, API, and browser behavior | Implemented |
 | Establish maintainable architecture | Separate API, service, domain, repository, and storage responsibilities | Implemented |
-| Establish a reliable payment foundation | Introduce persistence, monetary precision, idempotency, concurrency, and consistency controls | Next Priority |
-| Demonstrate applied AI expertise | Build AI-assisted RCA and test-generation capabilities on top of reliable test data | Planned |
-| Demonstrate UI automation expertise | Build a dashboard and validate it through Selenium | Planned |
+| Establish reliable payment behavior | Implement idempotency and deterministic failure handling | Implemented |
+| Establish durable payment infrastructure | Introduce PostgreSQL, transaction boundaries, concurrency controls, and durable persistence | Next Priority |
+| Demonstrate UI automation expertise | Validate dashboard and payment workflows through Playwright | Implemented |
 | Demonstrate CI/CD engineering | Automate regression execution and failure reporting | Planned |
+| Demonstrate applied AI expertise | Build AI-assisted RCA and test-generation capabilities | Planned |
 | Demonstrate observability | Trace payment and test-execution behavior | Planned |
 | Create a portfolio-ready engineering artifact | Maintain clear documentation, reproducible setup, automated regression, and incremental architecture | In Progress |
-| Demonstrate enterprise-oriented engineering | Apply payment-system reliability, security, observability, and automation practices | Planned |
+| Demonstrate enterprise-oriented engineering | Apply payment-system reliability, security, observability, and automation practices | In Progress |
 
 ---
 
@@ -74,6 +93,7 @@ The project should demonstrate:
 - QA automation expertise
 - Payment-domain understanding
 - **API** testing
+- Browser automation
 - Python development
 - Maintainable architecture
 - Reliability engineering
@@ -101,6 +121,7 @@ The project should provide enough technical depth to discuss:
 - CI/CD
 - Observability
 - Security considerations
+- Playwright-based E2E automation
 
 ## Development User
 
@@ -109,6 +130,8 @@ The project also serves as an engineering laboratory for experimenting with:
 - Payment-system testing
 - Reliability engineering
 - Test automation
+- API automation
+- Browser automation
 - AI-augmented quality engineering
 - Local AI workflows
 
@@ -139,7 +162,7 @@ AI should analyze and augment the engineering process, not compensate for an uns
 
 ## 2. Reliability Before Architectural Expansion
 
-The project should solve the most important payment-domain problems before adding additional infrastructure.
+The project should solve the most important payment-domain problems before adding unnecessary infrastructure.
 
 The intended progression is:
 
@@ -159,10 +182,16 @@ Persistent Storage
 Automation Platform
       |
       v
+CI/CD
+      |
+      v
 AI Augmentation
+      |
+      v
+Observability + Security
 ```
 
-Adding technologies without solving the underlying reliability problems would produce architectural decoration rather than engineering value. Humanity has already contributed enough of that.
+Adding technologies without solving the underlying reliability problems would produce architectural decoration rather than engineering value.
 
 ---
 
@@ -194,11 +223,12 @@ This makes business logic independently testable and allows infrastructure to ev
 
 Every important payment-domain rule should be testable independently from the **HTTP** layer.
 
-The current implementation therefore contains separate:
+The current implementation contains separate:
 
 * State machine tests
 * Payment service tests
 * **API** tests
+* Browser-based E2E tests
 
 ---
 
@@ -206,7 +236,7 @@ The current implementation therefore contains separate:
 
 The test environment should produce reproducible results.
 
-Failure simulation, controlled test data, explicit state transitions, and deterministic business rules are preferred over uncontrolled external dependencies.
+Failure simulation, controlled test data, explicit state transitions, deterministic idempotency behavior, and controlled application state are preferred over uncontrolled external dependencies.
 
 ---
 
@@ -232,6 +262,7 @@ The project must not claim:
 * Real VISA/Mastercard network integration
 * **PCI-DSS** certification
 * Production cardholder-data compliance
+* Real financial settlement
 
 ---
 
@@ -250,7 +281,8 @@ The FastAPI application currently supports:
 * Full refunds
 * Partial refunds
 * Transaction lookup
-* Simulated technical failures
+* Deterministic technical-failure simulation
+* Idempotent authorization requests
 
 ### Payment Domain
 
@@ -261,18 +293,20 @@ The current domain architecture includes:
 * Transaction Repository
 * Typed domain exceptions
 * Transaction history/events
+* Card state management
+* Idempotency records
 
 ### Automated Testing
 
 The current automated regression suite contains:
 
 ```text
-14 State Machine Tests
-14 Payment Service Tests
-36 API Tests
------------------
-64 Total Tests
-64 Passed
+API Tests
+Unit Tests
+Playwright E2E Tests
+---------------------
+96 Total Tests
+96 Passed
 0 Failed
 ```
 
@@ -287,9 +321,24 @@ The current suite covers:
 * Partial refunds
 * Multiple partial refunds
 * Insufficient funds
+* Missing required fields
+* Invalid card networks
+* Invalid card balances
+* Card-not-found scenarios
+* Inactive-card scenarios
+* Idempotency replay
+* Idempotency conflict detection
+* Different idempotency keys
+* Non-idempotent requests
 * Simulated timeout
 * Simulated network errors
 * Simulated invalid responses
+* Dashboard loading
+* Card issuance through the UI
+* Transactions page loading
+* Transactions empty state
+* Authorized transaction visibility
+* Transaction lifecycle dialog behavior
 
 ---
 
@@ -337,6 +386,52 @@ Invalid operations include:
 
 ---
 
+# Idempotency
+
+Idempotency is currently implemented for authorization operations.
+
+The implementation stores:
+
+```text
+Idempotency-Key
+       |
+       v
+Request Fingerprint
+       |
+       v
+Original Response
+```
+
+The system distinguishes between:
+
+```text
+Same key + same request
+        |
+        v
+Replay original response
+```
+
+and:
+
+```text
+Same key + different request
+        |
+        v
+HTTP 409 Conflict
+```
+
+The current API test suite validates:
+
+* Replaying the same authorization
+* Preventing duplicate financial effects
+* Rejecting a reused key for a different request
+* Treating different keys as separate operations
+* Preserving non-idempotent behavior when no key is supplied
+
+Idempotency should eventually be extended consistently to capture, settlement, and refund operations.
+
+---
+
 # Current Architecture
 
 The current logical architecture is:
@@ -349,12 +444,14 @@ The current logical architecture is:
 │ HTTP response handling      │
 │ Domain error translation    │
 │ Failure simulation          │
+│ Idempotency handling        │
 └─────────────┬───────────────┘
               |
               v
 ┌─────────────────────────────┐
 │       Payment Service       │
 │                             │
+│ Authorization              │
 │ Capture                     │
 │ Settlement                  │
 │ Refund                      │
@@ -377,12 +474,86 @@ The current logical architecture is:
               v
 ┌─────────────────────────────┐
 │       In-Memory Storage     │
+│                             │
+│ Cards                       │
+│ Transactions               │
+│ Audit Events                │
+│ Idempotency Records         │
 └─────────────────────────────┘
 ```
 
 The repository abstraction deliberately isolates payment business logic from the current storage implementation.
 
-This provides a migration path toward PostgreSQL without requiring the payment service to become database-aware.
+This provides a migration path toward PostgreSQL without requiring the Payment Service to become database-aware.
+
+---
+
+# Current Frontend / Automation Architecture
+
+The project now includes a browser-based PayGuard AI dashboard.
+
+The current E2E architecture is:
+
+```text
+Playwright
+    |
+    v
+Frontend
+localhost:5173
+    |
+    v
+PayGuard AI Dashboard
+    |
+    +-------------------+
+    |                   |
+    v                   v
+Overview          Transactions
+    |                   |
+    |                   v
+    |             Lifecycle Dialog
+    |
+    v
+Payment Operations
+    |
+    v
+FastAPI Backend
+localhost:8000
+```
+
+The E2E suite uses Page Object Model classes to isolate UI selectors and interactions.
+
+Current Transactions Page Object coverage includes:
+
+* Navigation
+* Page-load validation
+* Empty-state validation
+* Transaction lookup
+* Transaction visibility
+* Transaction status validation
+* Transaction amount validation
+* Lifecycle dialog opening
+* Lifecycle dialog validation
+* Lifecycle dialog closing
+
+The frontend is intentionally started independently of pytest.
+
+The current development environment uses:
+
+```text
+Frontend:
+http://localhost:5173
+
+Backend:
+http://localhost:8000
+```
+
+The backend is started using:
+
+```text
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+The restricted reload directory prevents unnecessary file-watcher activity outside the application source tree.
 
 ---
 
@@ -424,6 +595,8 @@ The authorization process shall:
 * Produce a `DECLINED` transaction when funds are insufficient
 
 Insufficient funds are treated as a payment-domain decline rather than an **API** or server failure.
+
+The authorization endpoint shall support an optional `Idempotency-Key`.
 
 ---
 
@@ -505,7 +678,7 @@ The response shall expose relevant transaction information, including where appl
 
 The system shall support deterministic technical-failure simulation using the `X-Simulate-Failure` request header.
 
-Supported scenarios currently include:
+Supported scenarios include:
 
 ```text
 TIMEOUT
@@ -522,19 +695,45 @@ These failures provide repeatable scenarios for:
 
 ---
 
+## FR-08: Browser-Based Transactions Validation
+
+The frontend shall expose transaction information through the Transactions page.
+
+The Transactions interface shall support:
+
+* Navigation from the dashboard
+* Transaction table display
+* Empty transaction state
+* Transaction visibility
+* Transaction status visibility
+* Transaction amount visibility
+* Lifecycle inspection
+* Lifecycle dialog closing
+* Refresh behavior
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-01: Testability
 
 Payment-domain business rules should be independently testable without requiring the **HTTP** layer.
 
+UI behavior should be testable independently through Page Object abstractions.
+
+---
+
 ## NFR-02: Maintainability
 
-Business logic should remain separated from framework and persistence concerns.
+Business logic should remain separated from framework, browser automation, and persistence concerns.
+
+---
 
 ## NFR-03: Determinism
 
 Automated tests should be repeatable and should not depend on uncontrolled external payment systems.
+
+---
 
 ## NFR-04: Extensibility
 
@@ -547,8 +746,11 @@ The architecture should allow:
 * AI analysis
 * CI/CD
 * Observability
+* Performance testing
 
 without requiring a fundamental rewrite of the payment domain.
+
+---
 
 ## NFR-05: Security
 
@@ -562,17 +764,24 @@ Future iterations should introduce:
 * Secure secrets management
 * Sensitive-data protection
 * Structured security logging
+* Security-focused integration tests
+
+---
 
 ## NFR-06: Reliability
 
 Future versions should address:
 
-* Idempotency
+* Full idempotency coverage
 * Concurrency
 * Transaction consistency
 * Persistence failures
 * Retry behavior
 * Recovery scenarios
+* Database transaction boundaries
+* Durable audit history
+
+---
 
 ## NFR-07: Financial Accuracy
 
@@ -587,11 +796,33 @@ The reliability phase should establish:
 
 ---
 
+## NFR-08: Browser Automation Reliability
+
+E2E tests should:
+
+* Prefer accessible selectors
+* Avoid unnecessary brittle CSS selectors
+* Use Page Object abstractions
+* Create deterministic backend test data where required
+* Validate actual user-visible behavior
+* Remain independent of arbitrary UI timing
+
+---
+
 # Current Persistence Model
 
 The current application uses in-memory storage.
 
-This is appropriate for the initial domain implementation because it provides:
+The storage implementation maintains:
+
+```text
+Cards
+Transactions
+Audit Events
+Idempotency Records
+```
+
+In-memory storage is appropriate for the current development and test foundation because it provides:
 
 * Simple development
 * Fast execution
@@ -619,27 +850,27 @@ The next architecture phase will introduce PostgreSQL through the existing repos
 
 The future persistence implementation should provide:
 
-### PR-01: Durable Transactions
+## PR-01: Durable Transactions
 
 Transaction state must survive application restarts.
 
-### PR-02: Transactional Updates
+## PR-02: Transactional Updates
 
 Payment operations that modify related records must execute within appropriate database transaction boundaries.
 
-### PR-03: Consistency
+## PR-03: Consistency
 
 The database must prevent states that violate payment-domain invariants.
 
-### PR-04: Concurrency Control
+## PR-04: Concurrency Control
 
 Concurrent operations on the same transaction must not produce invalid lifecycle states or duplicate financial operations.
 
-### PR-05: Auditability
+## PR-05: Auditability
 
 Important payment lifecycle events should be durably persisted.
 
-### PR-06: Repository Isolation
+## PR-06: Repository Isolation
 
 The Payment Service should continue to depend on repository abstractions rather than directly on SQLAlchemy or PostgreSQL implementation details.
 
@@ -647,18 +878,19 @@ The Payment Service should continue to depend on repository abstractions rather 
 
 # Reliability Requirements
 
-The next major product phase is focused on payment reliability.
+The next major product phase is focused on payment reliability and persistence.
 
-## REL-01: Idempotency
+## REL-01: Idempotency Expansion
 
-Repeated requests representing the same logical payment operation should not result in duplicate financial effects.
+Authorization idempotency is currently implemented.
 
-Initial operations requiring idempotency consideration:
+The remaining payment operations should eventually receive equivalent protection:
 
-* Authorization
 * Capture
 * Settlement
 * Refund
+
+Repeated requests representing the same logical payment operation should not result in duplicate financial effects.
 
 The implementation should support deterministic handling of repeated requests.
 
@@ -736,10 +968,15 @@ Payment lifecycle events should eventually be stored durably so that transaction
 | Repository Abstraction           | Implemented |
 | Domain Exceptions                | Implemented |
 | Transaction History/Events       | Implemented |
-| API Test Suite                   | Implemented |
-| Service Test Suite               | Implemented |
-| State Machine Test Suite         | Implemented |
+| Authorization Idempotency        | Implemented |
 | Deterministic Failure Simulation | Implemented |
+| API Test Suite                   | Implemented |
+| Unit Test Suite                  | Implemented |
+| Playwright E2E Suite             | Implemented |
+| Dashboard Smoke Test             | Implemented |
+| Card UI Flow                     | Implemented |
+| Transactions UI Flow             | Implemented |
+| Lifecycle Dialog Validation      | Implemented |
 
 ---
 
@@ -750,31 +987,29 @@ Payment lifecycle events should eventually be stored durably so that transaction
 | Monetary Precision Hardening  | Next   |
 | PostgreSQL Persistence        | Next   |
 | SQLAlchemy Integration        | Next   |
-| Idempotency                   | Next   |
+| Full Idempotency Coverage     | Next   |
 | Concurrency Controls          | Next   |
 | Transaction Consistency       | Next   |
 | Durable Audit/Event Storage   | Next   |
 | Persistence Integration Tests | Next   |
 | Persistence Failure Tests     | Next   |
+| Expanded E2E Payment Flows    | Next   |
 
 ---
 
 ## Future Scope
 
-| Feature                | Status  |
-| ---------------------- | ------- |
-| UI Dashboard           | Planned |
-| Selenium Automation    | Planned |
-| End-to-End Test Flows  | Planned |
-| Docker Compose         | Planned |
-| GitHub Actions CI/CD   | Planned |
-| AI RCA Engine          | Planned |
-| AI Test Case Generator | Planned |
-| ChromaDB Integration   | Planned |
-| Ollama Integration     | Planned |
-| OpenTelemetry          | Planned |
-| Security Hardening     | Planned |
-| Performance Testing    | Planned |
+| Feature                               | Status  |
+| ------------------------------------- | ------- |
+| GitHub Actions CI/CD                  | Planned |
+| AI RCA Engine                         | Planned |
+| AI Test Case Generator                | Planned |
+| ChromaDB Integration                  | Planned |
+| Ollama Integration                    | Planned |
+| OpenTelemetry                         | Planned |
+| Security Hardening                    | Planned |
+| Performance Testing                   | Planned |
+| Containerized Integration Environment | Planned |
 
 ---
 
@@ -958,7 +1193,7 @@ Observability should be introduced after the underlying transaction and persiste
 
 # Performance and Reliability Requirements
 
-Performance testing is not part of the current 64-test regression baseline.
+Performance testing is not part of the current 96-test regression baseline.
 
 Future performance validation should focus on realistic payment-system behavior rather than arbitrary throughput numbers.
 
@@ -986,23 +1221,27 @@ Success criteria distinguish between currently achieved capabilities and future 
 
 | Metric                     | Current Result                           |
 | -------------------------- | ---------------------------------------- |
-| Automated regression suite | 64 tests                                 |
-| Passing tests              | 64                                       |
+| Automated regression suite | 96 tests                                 |
+| Passing tests              | 96                                       |
 | Failed tests               | 0                                        |
 | State-machine testing      | Implemented                              |
 | Payment Service testing    | Implemented                              |
-| API testing                | 36 tests                                 |
+| API testing                | Implemented                              |
+| Idempotency testing        | Implemented                              |
 | Refund scenarios           | Full, partial, multiple partial          |
 | Failure simulation         | Timeout, network error, invalid response |
 | Layered architecture       | Implemented                              |
 | Repository abstraction     | Implemented                              |
 | Domain exceptions          | Implemented                              |
+| Dashboard E2E testing      | Implemented                              |
+| Transactions E2E testing   | Implemented                              |
+| Lifecycle UI validation    | Implemented                              |
 
 The current baseline is:
 
 ```text
-64 tests
-64 passed
+96 tests
+96 passed
 0 failed
 ```
 
@@ -1010,17 +1249,17 @@ The current baseline is:
 
 ## Next-Phase Success Criteria
 
-| Metric                  | Target                                                     |
-| ----------------------- | ---------------------------------------------------------- |
-| Monetary representation | Explicit decimal-based currency handling                   |
-| Persistence             | Transaction data survives application restart              |
-| Database transactions   | Payment operations have appropriate transaction boundaries |
-| Idempotency             | Duplicate payment operations safely handled                |
-| Concurrency             | Concurrent operations do not violate payment invariants    |
-| Audit history           | Lifecycle events persist durably                           |
-| Integration tests       | Database-backed payment flows covered                      |
-| Persistence failures    | Rollback and failure behavior validated                    |
-| Regression              | Existing 64-test baseline remains green                    |
+| Metric                  | Target                                                                   |
+| ----------------------- | ------------------------------------------------------------------------ |
+| Monetary representation | Explicit decimal-based currency handling                                 |
+| Persistence             | Transaction data survives application restart                            |
+| Database transactions   | Payment operations have appropriate transaction boundaries               |
+| Idempotency             | Authorization, capture, settlement, and refund operations safely handled |
+| Concurrency             | Concurrent operations do not violate payment invariants                  |
+| Audit history           | Lifecycle events persist durably                                         |
+| Integration tests       | Database-backed payment flows covered                                    |
+| Persistence failures    | Rollback and failure behavior validated                                  |
+| Regression              | Existing 96-test baseline remains green                                  |
 
 ---
 
@@ -1042,7 +1281,7 @@ The current baseline is:
 
 # Project Phases / Roadmap
 
-The project roadmap has been revised to prioritize reliability before UI and AI expansion.
+The project roadmap has been revised to reflect the current implementation and prioritize reliability before advanced AI expansion.
 
 ## Phase 1 — Payment Gateway Foundation
 
@@ -1095,53 +1334,77 @@ Deliverables:
 Current baseline:
 
 ```text
-64 passed
+96 passed
 0 failed
 ```
 
 ---
 
-## Phase 4 — Payment Reliability and Persistence
+## Phase 4 — API Reliability and Idempotency
+
+**Status: Partially Completed**
+
+Implemented:
+
+* Authorization idempotency
+* Idempotency request fingerprinting
+* Idempotent response replay
+* Idempotency conflict detection
+* Duplicate financial-effect prevention
+
+Remaining work:
+
+* Idempotency for capture
+* Idempotency for settlement
+* Idempotency for refunds
+* Broader reliability integration testing
+
+---
+
+## Phase 5 — Payment Reliability and Persistence
 
 **Status: Next Priority**
 
 Planned deliverables:
 
-* Monetary precision
+* Monetary precision hardening
 * PostgreSQL persistence
 * SQLAlchemy integration
-* Transaction boundaries
-* Idempotency
+* Explicit transaction boundaries
 * Concurrency protection
 * Transaction consistency
 * Durable audit/event storage
 * Persistence failure handling
 * Database-backed integration tests
-
-This phase is the immediate priority.
+* Rollback testing
 
 The goal is to transform the current deterministic in-memory payment model into a more realistic and testable transactional system.
 
 ---
 
-## Phase 5 — Automation Platform
+## Phase 6 — Automation Platform
 
-**Status: Planned**
+**Status: Partially Completed**
 
-Planned deliverables:
+Implemented:
 
 * Web Dashboard
-* Selenium automation
-* End-to-end payment flows
-* Transaction history validation
-* UI error-state testing
-* Expanded integration testing
+* Dashboard smoke testing
+* Card UI flow
+* Transactions UI flow
+* Playwright Page Objects
+* Transactions lifecycle dialog validation
+* API-backed E2E test data setup
 
-The dashboard and frontend should be introduced only after the backend reliability foundation is sufficiently stable.
+Remaining work:
+
+* Expanded payment lifecycle E2E flows
+* UI error-state testing
+* Broader cross-layer integration coverage
 
 ---
 
-## Phase 6 — CI/CD
+## Phase 7 — CI/CD
 
 **Status: Planned**
 
@@ -1157,7 +1420,7 @@ Planned deliverables:
 
 ---
 
-## Phase 7 — AI Root Cause Analysis
+## Phase 8 — AI Root Cause Analysis
 
 **Status: Planned**
 
@@ -1174,7 +1437,7 @@ Planned deliverables:
 
 ---
 
-## Phase 8 — AI Test Case Generation
+## Phase 9 — AI Test Case Generation
 
 **Status: Planned**
 
@@ -1190,7 +1453,7 @@ Planned deliverables:
 
 ---
 
-## Phase 9 — Observability and Security Hardening
+## Phase 10 — Observability and Security Hardening
 
 **Status: Planned**
 
@@ -1234,12 +1497,16 @@ The project currently assumes:
 * Payment data is synthetic.
 * The Mock Payment Gateway is not connected to real payment networks.
 * The current storage implementation is in-memory.
-* The project is developed locally.
+* The frontend is developed and tested locally.
+* The frontend development server runs on port 5173.
+* The backend development server runs on port 8000.
+* Playwright is the current browser automation framework.
 * The project may be developed from a OneDrive-synchronized directory, requiring restricted Uvicorn reload monitoring.
 * AI capabilities will initially use local inference through Ollama.
 * AI-generated conclusions and test cases will require validation.
 * PostgreSQL will become the next persistent storage implementation through the repository abstraction.
 * Existing payment-domain behavior should remain stable while infrastructure is introduced.
+* The current 96-test regression baseline should remain green as new capabilities are introduced.
 
 ---
 
@@ -1278,7 +1545,7 @@ Existing tests should remain green as new capabilities are introduced.
 | Risk                                    | Impact      | Mitigation                                                                 |
 | --------------------------------------- | ----------- | -------------------------------------------------------------------------- |
 | In-memory storage loses data on restart | High        | Introduce PostgreSQL persistence                                           |
-| Duplicate payment operations            | High        | Implement idempotency                                                      |
+| Duplicate payment operations            | High        | Extend idempotency across payment operations                               |
 | Concurrent transaction operations       | High        | Add concurrency controls and database transactions                         |
 | Floating-point monetary calculations    | High        | Use decimal-based monetary representation                                  |
 | Database transaction inconsistency      | High        | Define explicit transaction boundaries and rollback behavior               |
@@ -1289,6 +1556,8 @@ Existing tests should remain green as new capabilities are introduced.
 | Insufficient observability              | Medium      | Structured logging and OpenTelemetry                                       |
 | Security assumptions                    | High        | Explicitly separate portfolio simulation from production/PCI claims        |
 | Premature architectural expansion       | Medium      | Introduce new infrastructure only when justified by a concrete requirement |
+| Brittle E2E selectors                   | Medium      | Prefer accessible roles and stable application semantics                   |
+| Shared backend state between tests      | Medium      | Use deterministic E2E fixtures and isolated test data                      |
 
 ---
 
@@ -1306,6 +1575,7 @@ The project will be considered portfolio-ready when the following minimum capabi
 * [x] Partial refund
 * [x] Transaction lookup
 * [x] State-machine validation
+* [x] Transaction history/events
 
 ## Automated Testing
 
@@ -1316,7 +1586,12 @@ The project will be considered portfolio-ready when the following minimum capabi
 * [x] Negative scenarios
 * [x] Boundary scenarios
 * [x] Failure simulation
-* [x] 64-test regression baseline
+* [x] Authorization idempotency tests
+* [x] Playwright E2E tests
+* [x] Dashboard smoke test
+* [x] Transactions page tests
+* [x] Transaction lifecycle UI test
+* [x] 96-test regression baseline
 
 ## Architecture
 
@@ -1325,13 +1600,17 @@ The project will be considered portfolio-ready when the following minimum capabi
 * [x] Domain exceptions
 * [x] Separation of **API** and business logic
 * [x] Transaction history/events
+* [x] Idempotency storage abstraction
 
 ## Reliability
 
+* [x] Authorization idempotency
 * [ ] Monetary precision hardening
 * [ ] PostgreSQL persistence
 * [ ] SQLAlchemy integration
-* [ ] Idempotency
+* [ ] Capture idempotency
+* [ ] Settlement idempotency
+* [ ] Refund idempotency
 * [ ] Concurrency protection
 * [ ] Transaction consistency
 * [ ] Durable audit/event storage
@@ -1340,9 +1619,12 @@ The project will be considered portfolio-ready when the following minimum capabi
 
 ## Automation
 
-* [ ] UI Dashboard
-* [ ] Selenium tests
-* [ ] End-to-end test flows
+* [x] UI Dashboard
+* [x] Playwright automation
+* [x] Dashboard smoke test
+* [x] Transactions page automation
+* [x] Transaction lifecycle automation
+* [ ] Complete end-to-end payment lifecycle
 * [ ] CI/CD pipeline
 
 ## AI
@@ -1365,7 +1647,7 @@ The project will be considered portfolio-ready when the following minimum capabi
 
 # Current Product Status
 
-**Current milestone: Payment Domain + Automated Regression Foundation**
+**Current milestone: Payment Domain + Automated Regression + Initial UI Automation**
 
 PayGuard AI has progressed beyond the initial mock-**API** stage.
 
@@ -1379,77 +1661,85 @@ The current implementation contains:
 * Refund handling
 * Transaction history/events
 * Deterministic failure simulation
-* 64 automated regression tests
-* 64 passing tests
+* Authorization idempotency
+* A functioning dashboard
+* Transactions UI
+* Playwright Page Objects
+* Browser-based E2E tests
+* API-backed E2E test fixtures
+* 96 automated regression tests
+* 96 passing tests
 * 0 failing tests
 
 The next strategic priority is **payment reliability and persistence**.
 
-The project should not immediately expand into frontend, UI automation, or AI implementation before addressing the limitations of in-memory persistence and payment reliability.
+The project should not immediately expand into advanced AI, observability, or additional infrastructure before addressing the limitations of in-memory persistence, incomplete idempotency coverage, concurrency, and transaction durability.
 
 The recommended progression is:
 
 ```text
-                 CURRENT
-                    |
-                    v
-┌─────────────────────────────────┐
-│ Payment Domain Foundation       │
-│ 64 Tests Green                  │
-└────────────────┬────────────────┘
-                 |
-                 v
-┌─────────────────────────────────┐
-│ Payment Reliability             │
-│                                 │
-│ Monetary Precision              │
-│ PostgreSQL                      │
-│ Idempotency                     │
-│ Concurrency                     │
-│ Transaction Consistency         │
-│ Durable Audit Events            │
-└────────────────┬────────────────┘
-                 |
-                 v
-┌─────────────────────────────────┐
-│ Automation Platform             │
-│                                 │
-│ UI Dashboard                    │
-│ Selenium                        │
-│ End-to-End Testing              │
-└────────────────┬────────────────┘
-                 |
-                 v
-┌─────────────────────────────────┐
-│ CI/CD                           │
-│                                 │
-│ GitHub Actions                  │
-│ Automated Regression            │
-└────────────────┬────────────────┘
-                 |
-                 v
-┌─────────────────────────────────┐
-│ AI Root Cause Analysis          │
-│                                 │
-│ ChromaDB + Ollama               │
-└────────────────┬────────────────┘
-                 |
-                 v
-┌─────────────────────────────────┐
-│ AI Test Case Generation         │
-│                                 │
-│ OpenAPI + LLM                   │
-└────────────────┬────────────────┘
-                 |
-                 v
-┌─────────────────────────────────┐
-│ Security + Observability        │
-│                                 │
-│ OpenTelemetry + Hardening       │
-└─────────────────────────────────┘
+                       CURRENT
+                          |
+                          v
+┌─────────────────────────────────────┐
+│ Payment Domain Foundation           │
+│                                     │
+│ 96 Tests Green                      │
+│ API + Unit + Playwright E2E         │
+│ Idempotency for Authorization       │
+└──────────────────┬──────────────────┘
+                   |
+                   v
+┌─────────────────────────────────────┐
+│ Payment Reliability                 │
+│                                     │
+│ Monetary Precision                  │
+│ PostgreSQL                          │
+│ Full Idempotency                    │
+│ Concurrency                         │
+│ Transaction Consistency             │
+│ Durable Audit Events                │
+└──────────────────┬──────────────────┘
+                   |
+                   v
+┌─────────────────────────────────────┐
+│ Automation Platform                 │
+│                                     │
+│ Dashboard                           │
+│ Playwright                          │
+│ End-to-End Payment Flows            │
+└──────────────────┬──────────────────┘
+                   |
+                   v
+┌─────────────────────────────────────┐
+│ CI/CD                               │
+│                                     │
+│ GitHub Actions                      │
+│ Automated Regression                │
+│ Test Artifacts                      │
+└──────────────────┬──────────────────┘
+                   |
+                   v
+┌─────────────────────────────────────┐
+│ AI Root Cause Analysis              │
+│                                     │
+│ ChromaDB + Ollama                   │
+└──────────────────┬──────────────────┘
+                   |
+                   v
+┌─────────────────────────────────────┐
+│ AI Test Case Generation             │
+│                                     │
+│ OpenAPI + LLM                      │
+└──────────────────┬──────────────────┘
+                   |
+                   v
+┌─────────────────────────────────────┐
+│ Security + Observability            │
+│                                     │
+│ OpenTelemetry + Hardening           │
+└─────────────────────────────────────┘
 ```
 
-The current 64-test green baseline is the foundation for the next stage of the project.
 
-Future functionality must be introduced without weakening the existing payment-domain invariants or regressing the automated test baseline.
 

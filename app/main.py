@@ -103,6 +103,33 @@ audit_service = AuditService(
 
 
 # ============================================================================
+# Test State Reset
+# ============================================================================
+
+@app.post("/api/v1/test/reset")
+def reset_test_state():
+    """
+    Reset all in-memory application state.
+
+    This endpoint exists exclusively for local E2E test isolation.
+
+    It clears:
+        - cards
+        - transactions
+        - audit events
+        - idempotency records
+
+    Do not expose this endpoint in a production deployment.
+    """
+
+    storage.reset()
+
+    return {
+        "message": "Test state reset successfully",
+    }
+
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 

@@ -2,22 +2,24 @@
 
 ## Purpose
 
-This document provides instructions for setting up PayGuard AI locally, running the Mock Payment Gateway, executing the automated test suite, and working with the Web Dashboard.
+This document provides instructions for setting up PayGuard AI locally, running the Mock Payment Gateway, running the Web Dashboard, executing the complete automated test suite, and working with the current Playwright E2E test environment.
 
-PayGuard AI is being developed incrementally. The current implementation has established the payment-domain foundation, transaction lifecycle, service layer, repository abstraction, automated regression suite, and the initial Web Dashboard.
+PayGuard AI is being developed incrementally. The current implementation contains the payment-domain foundation, transaction lifecycle, service layer, repository abstraction, audit functionality, idempotency handling, Web Dashboard, API tests, unit tests, and Playwright-based E2E coverage.
 
-At the current project stage, active development of the backend and frontend is temporarily paused. The implemented code and documentation are retained as the baseline for the next development phase.
+The current development baseline should be treated as a stable checkpoint before the next implementation phase.
 
-The current setup therefore focuses on:
+The current setup focuses on:
 
 - Reproducing the existing backend environment
-- Running the Mock Payment Gateway when required
-- Running the existing automated regression suite
-- Inspecting the Web Dashboard when required
-- Maintaining a clean and reproducible development environment
-- Preserving the current architecture before the next implementation phase
+- Running the Mock Payment Gateway
+- Running the Web Dashboard
+- Running unit and API tests
+- Running Playwright E2E tests
+- Maintaining deterministic synthetic test data
+- Preserving the current layered architecture
+- Verifying the complete regression suite before committing changes
 
-PostgreSQL, AI/RCA infrastructure, Docker orchestration, CI/CD, and other planned platform components are not required for the current baseline.
+PostgreSQL, Docker orchestration, AI/RCA infrastructure, CI/CD, and observability components remain planned capabilities unless explicitly implemented elsewhere in the repository.
 
 ---
 
@@ -27,35 +29,72 @@ PostgreSQL, AI/RCA infrastructure, Docker orchestration, CI/CD, and other planne
 |---|---|---|
 | Python | 3.11.x | Required |
 | Git | Current stable version | Required |
+| Node.js | Current project-compatible version | Required for Dashboard |
+| npm | Installed with Node.js | Required for Dashboard |
 | IntelliJ IDEA / PyCharm | Current development environment | Recommended |
-| Node.js / npm | Required when working on the Dashboard | Required for frontend development |
+| Playwright | Installed through Python requirements | Required for E2E tests |
+| Chromium | Playwright-managed browser | Required for current E2E tests |
 | Docker Desktop | Current stable version | Planned |
 | Ollama | Current stable version | Planned |
 | PostgreSQL | Current supported version | Planned |
 
-## Current Verified Backend Environment
+---
+
+# Current Verified Backend Environment
 
 The current backend environment has been verified with:
 
 ```text
 Python 3.11.9
 Pytest 9.1.1
-FastAPI 0.141.1
-Starlette 1.6.0
-HTTPX 0.28.1
-Uvicorn 0.52.1
-Pydantic 2.13.4
+FastAPI
+HTTPX
+Uvicorn
+Pydantic
 ````
+
+The project dependencies are defined in:
+
+```text
+requirements.txt
+```
+
+The current requirements include:
+
+```text
+fastapi
+uvicorn
+pydantic
+pytest
+httpx
+selenium
+langchain
+langchain-community
+chromadb
+python-dotenv
+```
+
+Playwright is also required by the current E2E test suite and must be installed in the active Python environment.
 
 Patch versions may change as dependency maintenance continues.
 
 The current backend uses an in-memory storage implementation.
 
+This means that application restarts clear runtime state including:
+
+* Cards
+* Transactions
+* Transaction history
+* Audit events
+* Idempotency records
+
+Do not treat the in-memory implementation as persistent production storage.
+
 ---
 
 # Project Structure
 
-The project currently follows a layered backend architecture with a separate dashboard.
+The project currently follows a layered backend architecture with a separate React-based dashboard and automated test suite.
 
 ```text
 PayGuard-AI/
@@ -64,14 +103,24 @@ PayGuard-AI/
 │   ├── domain/
 │   ├── services/
 │   ├── repositories/
+│   ├── models/
+│   ├── storage/
+│   └── ...
+│
+├── dashboard/
 │   └── ...
 │
 ├── tests/
 │   ├── api/
-│   └── unit/
-│
-├── dashboard/
-│   └── ...
+│   ├── unit/
+│   └── e2e/
+│       ├── components/
+│       ├── pages/
+│       ├── conftest.py
+│       ├── test_cards.py
+│       ├── test_dashboard_smoke.py
+│       ├── test_transactions.py
+│       └── ...
 │
 ├── docs/
 │   ├── PRD.md
@@ -80,14 +129,17 @@ PayGuard-AI/
 │   ├── TECH_STACK.md
 │   ├── API_SPEC.md
 │   ├── AI_PIPELINE.md
-│   └── SETUP.md
+│   ├── SETUP.md
+│   └── playwright-vs-selenium-payguard-ai.md
 │
 ├── .venv/
 ├── requirements.txt
+├── README.md
+├── playwright.config.py
 └── ...
 ```
 
-The exact directory structure may evolve as new platform components are introduced.
+The exact directory structure may evolve as additional platform capabilities are introduced.
 
 ---
 
@@ -100,7 +152,7 @@ git clone https://github.com/Atharvagarud137/PayGuard-AI.git
 cd PayGuard-AI
 ```
 
-If the repository has already been cloned, navigate to the project directory:
+If the repository has already been cloned:
 
 ```powershell
 cd D:\Projects\PayGuard-AI
@@ -152,7 +204,7 @@ Verify the Python executable:
 python -c "import sys; print(sys.executable)"
 ```
 
-The executable should point to the project's virtual environment, for example:
+The executable should point to the project's virtual environment:
 
 ```text
 D:\Projects\PayGuard-AI\.venv\Scripts\python.exe
@@ -208,13 +260,37 @@ Verify Uvicorn:
 uvicorn --version
 ```
 
-The exact dependency versions may change as the project evolves.
+---
+
+# Step 4: Install Playwright
+
+Playwright is used for the current browser-based E2E test suite.
+
+Install the Python Playwright package if it is not already installed:
+
+```powershell
+pip install playwright
+```
+
+Install the Chromium browser:
+
+```powershell
+playwright install chromium
+```
+
+Verify Playwright:
+
+```powershell
+python -c "import playwright; print('Playwright installed successfully')"
+```
+
+The current E2E suite is configured to execute against Chromium.
 
 ---
 
-# Step 4: Verify the Backend Environment
+# Step 5: Verify the Backend Environment
 
-Before running the application or tests, verify:
+Before starting the application or running tests, verify:
 
 ```powershell
 python --version
@@ -222,12 +298,16 @@ pytest --version
 git status
 ```
 
-The Python interpreter should belong to `.venv`.
-
-The Git working tree should be inspected before making changes:
+Verify the Python executable:
 
 ```powershell
-git status
+python -c "import sys; print(sys.executable)"
+```
+
+The path should point to:
+
+```text
+D:\Projects\PayGuard-AI\.venv\Scripts\python.exe
 ```
 
 Do not commit:
@@ -240,11 +320,11 @@ Do not commit:
 * Generated test artifacts
 * Unrelated IDE files
 
-unless they are explicitly intended to be tracked by the project.
+unless they are explicitly intended to be tracked.
 
 ---
 
-# Step 5: Run the Mock Payment Gateway
+# Step 6: Run the Mock Payment Gateway
 
 The Mock Payment Gateway is implemented using FastAPI.
 
@@ -266,7 +346,7 @@ uvicorn app.main:app --reload
 
 during development.
 
-Instead, use:
+Instead use:
 
 ```powershell
 uvicorn app.main:app --reload --reload-dir app --port 8000
@@ -281,11 +361,13 @@ An unintended restart clears:
 * Cards
 * Transactions
 * Transaction history
+* Audit events
+* Idempotency records
 * Other in-memory application state
 
 ---
 
-# Step 6: Verify the API
+# Step 7: Verify the API
 
 With Uvicorn running, the root endpoint is:
 
@@ -293,27 +375,25 @@ With Uvicorn running, the root endpoint is:
 http://localhost:8000/
 ```
 
-The FastAPI Swagger UI is available at:
+FastAPI Swagger UI:
 
 ```text
 http://localhost:8000/docs
 ```
 
-The raw OpenAPI specification is available at:
+Raw OpenAPI specification:
 
 ```text
 http://localhost:8000/openapi.json
 ```
 
-The API base path is:
+API base path:
 
 ```text
 http://localhost:8000/api/v1
 ```
 
-The Swagger UI should expose the currently implemented payment operations.
-
-These include the core payment lifecycle:
+The API exposes the implemented payment operations including:
 
 ```text
 Card Issuance
@@ -331,33 +411,27 @@ Settlement
 Refund
 ```
 
-Transaction lookup is also available for inspecting transaction state and history.
+Transaction lookup and transaction history are also available through the implemented transaction APIs.
 
 ---
 
-# Step 7: Run the Automated Test Suite
+# Step 8: Run the Backend Test Suite
 
-The current automated test architecture contains three implemented layers:
+The current automated test suite contains:
 
-```text
-State Machine Tests
-        |
-        v
-Payment Service Tests
-        |
-        v
-API Tests
-```
+* API tests
+* Unit tests
+* Playwright E2E tests
 
-The current documented regression baseline is:
+The currently verified complete regression baseline is:
 
 ```text
-64 tests
-64 passed
+96 tests
+96 passed
 0 failed
 ```
 
-## Run the Complete Regression Suite
+## Run the Complete Test Suite
 
 From the project root:
 
@@ -367,16 +441,22 @@ pytest -v
 
 This is the primary regression command.
 
-Run the complete suite after changes affecting:
+The complete suite should be run after changes affecting:
 
 * Payment-domain logic
 * Transaction lifecycle
 * State machine
-* Payment service
+* Payment services
 * Repository behavior
+* Storage behavior
 * API endpoints
 * Request/response models
-* Transaction history
+* Audit functionality
+* Idempotency
+* Dashboard behavior
+* E2E Page Objects
+* E2E fixtures
+* Playwright configuration
 
 ---
 
@@ -386,13 +466,7 @@ Run the complete suite after changes affecting:
 pytest tests/api -v
 ```
 
-Current documented API baseline:
-
-```text
-36 tests
-```
-
-The API tests cover payment gateway behavior including:
+API tests cover payment gateway behavior including:
 
 * Card issuance
 * Authorization
@@ -402,97 +476,481 @@ The API tests cover payment gateway behavior including:
 * Validation failures
 * Invalid transaction states
 * Boundary conditions
+* Idempotency
+* Audit events
 * Simulated technical failures
 
 ---
 
-# Run Payment Service Tests
+# Run Unit Tests
+
+Run the complete unit test suite:
+
+```powershell
+pytest tests/unit -v
+```
+
+Run payment service tests specifically:
 
 ```powershell
 pytest tests/unit/test_payment_service.py -v
 ```
 
-Current documented baseline:
-
-```text
-14 tests
-```
-
-These tests validate payment business logic independently of FastAPI and HTTP behavior.
-
----
-
-# Run State Machine Tests
+Run state machine tests:
 
 ```powershell
 pytest tests/unit/test_state_machine.py -v
 ```
 
-Current documented baseline:
-
-```text
-14 tests
-```
-
-These tests validate transaction lifecycle rules independently from the API and storage implementation.
+The state machine tests validate transaction lifecycle rules independently from the API and storage implementation.
 
 ---
 
-# Current Regression Baseline
+# Step 9: Run Playwright E2E Tests
 
-| Test Layer      |  Tests | Expected Result          |
-| --------------- | -----: | ------------------------ |
-| API             |     36 | Passing                  |
-| Payment Service |     14 | Passing                  |
-| State Machine   |     14 | Passing                  |
-| **Total**       | **64** | **64 Passed / 0 Failed** |
+The current UI automation framework is **Playwright with Python and pytest**.
 
-The 64-test baseline represents the currently documented regression suite.
+The E2E tests are located under:
 
-When new functionality is added, the test count is expected to increase.
+```text
+tests/e2e/
+```
 
-The important requirement is that the full regression suite remains green.
+The current suite includes coverage for:
+
+* Dashboard smoke validation
+* Card issuance
+* Transactions page
+* Transaction empty state
+* Authorized transaction visibility
+* Transaction lifecycle dialog
+
+Current E2E test files include:
+
+```text
+tests/e2e/test_dashboard_smoke.py
+tests/e2e/test_cards.py
+tests/e2e/test_transactions.py
+```
+
+Page Objects are maintained under:
+
+```text
+tests/e2e/pages/
+```
+
+Current Page Objects include:
+
+```text
+tests/e2e/pages/cards_page.py
+tests/e2e/pages/dashboard_page.py
+tests/e2e/pages/transactions_page.py
+```
+
+The E2E fixtures are defined in:
+
+```text
+tests/e2e/conftest.py
+```
 
 ---
 
-# Step 8: Web Dashboard
+# E2E Environment Requirements
 
-The project contains a Web Dashboard intended to provide a visual interface for payment transaction monitoring and future Selenium automation.
+Playwright E2E tests require both the backend and frontend to be running.
 
-The dashboard is currently treated as a separate frontend application from the FastAPI backend.
+## Backend
 
-The dashboard is intended to provide visibility into concepts such as:
+Start:
 
-* Payment transactions
-* Transaction status
-* Transaction details
-* Transaction lifecycle
-* Transaction history
-* Payment cards
-* System information
-* AI-related functionality planned for later phases
-
-The transaction lifecycle displayed by the dashboard follows the backend payment-domain model.
-
-```text
-AUTHORIZED
-     |
-     v
-CAPTURED
-     |
-     v
-SETTLED
-     |
-     +----------------------+
-     |                      |
-     v                      v
-PARTIALLY_REFUNDED      REFUNDED
-     |
-     v
-REFUNDED
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
 ```
 
-The Dashboard should not become a second implementation of payment business rules.
+Backend URL:
+
+```text
+http://localhost:8000
+```
+
+## Frontend
+
+From the Dashboard directory:
+
+```powershell
+cd dashboard
+```
+
+Install dependencies when required:
+
+```powershell
+npm install
+```
+
+Inspect available npm scripts:
+
+```powershell
+npm run
+```
+
+Use the development command defined by `dashboard/package.json`.
+
+For a Vite-based development environment this is typically:
+
+```powershell
+npm run dev
+```
+
+The current E2E configuration expects the Dashboard at:
+
+```text
+http://localhost:5173
+```
+
+Therefore the normal local topology is:
+
+```text
+Frontend
+http://localhost:5173
+       |
+       | HTTP
+       v
+FastAPI Backend
+http://localhost:8000
+```
+
+---
+
+# Run All E2E Tests
+
+With both backend and frontend running:
+
+```powershell
+pytest tests\e2e -v
+```
+
+The current verified E2E baseline is:
+
+```text
+4 tests
+4 passed
+0 failed
+```
+
+The current E2E tests include:
+
+```text
+test_cards.py
+    test_issue_card_successfully
+
+test_dashboard_smoke.py
+    test_dashboard_loads
+
+test_transactions.py
+    test_transactions_page_loads
+    test_transactions_page_shows_empty_state
+```
+
+Additional transaction E2E coverage may be added as the workflow expands.
+
+---
+
+# Run Individual E2E Tests
+
+Dashboard smoke test:
+
+```powershell
+pytest tests\e2e\test_dashboard_smoke.py -v
+```
+
+Card E2E tests:
+
+```powershell
+pytest tests\e2e\test_cards.py -v
+```
+
+Transaction E2E tests:
+
+```powershell
+pytest tests\e2e\test_transactions.py -v
+```
+
+Run one individual test:
+
+```powershell
+pytest tests\e2e\test_transactions.py::test_transactions_page_loads -v
+```
+
+---
+
+# E2E Fixture Architecture
+
+The E2E test suite uses fixtures defined in:
+
+```text
+tests\e2e\conftest.py
+```
+
+The current fixtures include:
+
+```text
+frontend_url
+backend_url
+dashboard_page
+issued_e2e_card
+authorized_transaction
+```
+
+The `issued_e2e_card` fixture creates a fresh active card through the backend API before tests that require a valid payment card.
+
+The `authorized_transaction` fixture creates an authorized transaction through the backend API.
+
+This approach gives UI tests deterministic backend state without requiring the browser to perform every prerequisite operation manually.
+
+The general E2E flow is:
+
+```text
+pytest
+  |
+  v
+E2E Fixture
+  |
+  +----> Create Card through API
+  |
+  +----> Authorize Transaction through API
+  |
+  v
+Playwright Browser
+  |
+  v
+Dashboard
+  |
+  v
+Transactions Page
+  |
+  v
+User-visible Assertions
+```
+
+This keeps E2E tests focused on frontend behavior rather than turning every test into a slow recreation of the entire payment workflow.
+
+---
+
+# Playwright Configuration
+
+The project contains:
+
+```text
+playwright.config.py
+```
+
+This file belongs at the project root:
+
+```text
+D:\Projects\PayGuard-AI\playwright.config.py
+```
+
+The project does not currently rely on:
+
+```text
+pytest.ini
+```
+
+or:
+
+```text
+pyproject.toml
+```
+
+for the Playwright configuration.
+
+The Python pytest Playwright plugin provides the browser fixture used by the E2E tests.
+
+---
+
+# Page Object Model
+
+The E2E suite uses a Page Object Model.
+
+Page Objects are stored under:
+
+```text
+tests/e2e/pages/
+```
+
+The purpose of Page Objects is to separate:
+
+```text
+Test Intent
+    |
+    v
+Page Object
+    |
+    v
+Playwright Locators
+    |
+    v
+Application UI
+```
+
+Tests should describe user behavior and business expectations.
+
+Selectors and page-specific interaction details should remain inside Page Objects whenever practical.
+
+For example:
+
+```python
+transactions_page.open()
+transactions_page.expect_page_loaded()
+transactions_page.expect_empty_state()
+```
+
+rather than duplicating selectors throughout individual test functions.
+
+---
+
+# Locator Strategy
+
+The current Playwright implementation prefers:
+
+1. Accessible roles
+2. Accessible names
+3. Application semantics
+4. Stable test identifiers
+5. Stable CSS selectors where necessary
+
+Examples include:
+
+```python
+page.get_by_role(
+    "button",
+    name=re.compile(r"Transactions$"),
+)
+```
+
+and:
+
+```python
+page.get_by_role(
+    "heading",
+    name="Transactions",
+    exact=True,
+)
+```
+
+Dashboard health assertions also use application-level test identifiers such as:
+
+```text
+system-health
+health-payment-gateway
+health-payment-gateway-state
+```
+
+Avoid selectors based purely on generated CSS structure when a stable semantic locator exists.
+
+---
+
+# Transaction E2E Coverage
+
+The transaction E2E tests currently validate:
+
+## Transactions Page Loading
+
+The test verifies:
+
+* Transactions navigation is visible
+* Transactions page can be opened
+* Page heading is visible
+* Page description is visible
+* Transaction list panel is visible
+
+## Empty State
+
+When no transactions are available, the test verifies:
+
+```text
+No transactions yet
+```
+
+is visible.
+
+## Authorized Transaction
+
+An authorized transaction can be created through the backend API fixture and then verified through the Dashboard.
+
+The test verifies:
+
+* Transaction appears in the table
+* Merchant ID is visible
+* Transaction status is `AUTHORIZED`
+
+## Transaction Lifecycle
+
+The transaction lifecycle dialog can be opened from the transaction row.
+
+The test verifies:
+
+* The transaction row is visible
+* `View Lifecycle` is available
+* The lifecycle dialog opens
+* The lifecycle dialog can be closed
+
+---
+
+# E2E Test Data
+
+E2E tests use synthetic payment data.
+
+Example card:
+
+```text
+Cardholder:
+E2E Transaction User
+
+Network:
+VISA
+
+Initial Balance:
+5000
+```
+
+Example transaction:
+
+```text
+Amount:
+100
+
+Merchant:
+e2e-merchant-001
+```
+
+The tests should never use:
+
+* Real PANs
+* Real CVVs
+* Real payment credentials
+* Real customer information
+* Production authentication credentials
+
+The project is a Mock Payment Gateway and is not a PCI-DSS-certified payment processing environment.
+
+---
+
+# Dashboard
+
+The Dashboard is a separate frontend application located under:
+
+```text
+dashboard/
+```
+
+The expected local development URL is:
+
+```text
+http://localhost:5173
+```
+
+The Dashboard communicates with the backend through HTTP APIs.
 
 The backend remains the source of truth for:
 
@@ -501,77 +959,51 @@ The backend remains the source of truth for:
 * Lifecycle transitions
 * Transaction persistence
 * Domain validation
+* Audit information
 
 The frontend should primarily consume and present backend data.
 
----
-
-# Current Frontend Development Status
-
-Frontend and backend development are currently paused.
-
-This does not mean the existing implementation should be removed.
-
-The current state should be treated as a stable development checkpoint.
-
-```text
-Implemented Backend
-        |
-        v
-Implemented Dashboard Foundation
-        |
-        v
-Documentation Updated
-        |
-        v
-Development Paused
-```
-
-The purpose of the pause is to preserve the current architecture and establish a clean baseline before introducing the next major architectural capability.
-
-The next implementation phase should be selected deliberately rather than adding functionality simply because the project has empty roadmap boxes.
+It should not duplicate payment business rules.
 
 ---
 
-# Running the Dashboard
+# Dashboard Development
 
-The exact frontend startup command depends on the dashboard's package configuration.
-
-From the dashboard directory:
+From the project root:
 
 ```powershell
 cd dashboard
 ```
 
-Install frontend dependencies when required:
+Install dependencies:
 
 ```powershell
 npm install
 ```
 
-Then use the development script defined in `dashboard/package.json`.
-
-Typically this will be:
-
-```powershell
-npm run dev
-```
-
-or:
-
-```powershell
-npm start
-```
-
-Use the command actually defined in `package.json` rather than assuming a framework-specific command.
-
-To inspect the available scripts:
+Inspect available scripts:
 
 ```powershell
 npm run
 ```
 
-The frontend should be treated independently from the FastAPI process.
+Start the development server using the script defined in:
+
+```text
+dashboard/package.json
+```
+
+For the current Vite development environment:
+
+```powershell
+npm run dev
+```
+
+The Dashboard should then be available at:
+
+```text
+http://localhost:5173
+```
 
 ---
 
@@ -580,75 +1012,64 @@ The frontend should be treated independently from the FastAPI process.
 The intended local development topology is:
 
 ```text
-┌──────────────────────────┐
-│      Web Dashboard       │
-│       Frontend           │
-└────────────┬─────────────┘
-             |
-             | HTTP
-             v
-┌──────────────────────────┐
-│     FastAPI Gateway      │
-│       Port 8000          │
-└────────────┬─────────────┘
-             |
-             v
-┌──────────────────────────┐
-│    Payment Service       │
-└────────────┬─────────────┘
-             |
-             v
-┌──────────────────────────┐
-│   Payment Domain /       │
-│   Transaction State      │
-└────────────┬─────────────┘
-             |
-             v
-┌──────────────────────────┐
-│ Transaction Repository   │
-└────────────┬─────────────┘
-             |
-             v
-┌──────────────────────────┐
-│    In-Memory Storage     │
-└──────────────────────────┘
+┌────────────────────────────┐
+│        Web Dashboard       │
+│        Port 5173           │
+└─────────────┬──────────────┘
+              |
+              | HTTP
+              v
+┌────────────────────────────┐
+│      FastAPI Gateway       │
+│        Port 8000           │
+└─────────────┬──────────────┘
+              |
+              v
+┌────────────────────────────┐
+│      Payment Service       │
+└─────────────┬──────────────┘
+              |
+              v
+┌────────────────────────────┐
+│ Payment Domain / State     │
+│ Machine                    │
+└─────────────┬──────────────┘
+              |
+              v
+┌────────────────────────────┐
+│ Transaction Repository     │
+└─────────────┬──────────────┘
+              |
+              v
+┌────────────────────────────┐
+│     In-Memory Storage      │
+└────────────────────────────┘
 ```
 
 The Dashboard should communicate with the backend through the API rather than directly accessing application internals.
 
 ---
 
-# Step 9: UI Automation
+# Current Frontend Development Status
 
-Selenium is part of the planned test automation architecture.
+The current Dashboard implementation provides the foundation for:
 
-When the UI test suite is implemented, the expected command is:
+* Overview
+* Transactions
+* Cards
+* Payment operations
+* System health
+* Transaction lifecycle inspection
 
-```powershell
-pytest tests/ui -v
-```
+The current E2E suite verifies the implemented Dashboard behavior.
 
-The Dashboard and Mock Payment Gateway will need to be running for tests that depend on live services.
-
-Planned UI coverage includes:
-
-* Dashboard availability
-* Transaction listing
-* Transaction lookup
-* Transaction status
-* Transaction lifecycle visibility
-* Transaction history
-* Card visibility
-* Error-state presentation
-* User-visible payment workflow behavior
-
-UI tests should validate user-visible behavior rather than duplicate the complete API regression suite.
+The current development checkpoint should be treated as a stable baseline before introducing the next major architectural capability.
 
 ---
 
-# Step 10: AI Environment
+# AI Environment
 
-The AI layer is planned but is not required for the current payment-domain baseline.
+The AI layer is planned and is not required to run the current payment-domain regression suite.
 
 The planned AI stack includes:
 
@@ -661,9 +1082,15 @@ The planned AI stack includes:
 * AI Root Cause Analysis
 * AI test-case generation
 
-These components should not be installed merely to run the current backend regression suite.
+These components should not be installed merely to run:
 
-The intended architecture is:
+```powershell
+pytest -v
+```
+
+unless the corresponding implementation requires them.
+
+The intended AI flow is:
 
 ```text
 Test Failure
@@ -681,7 +1108,7 @@ Local LLM
 RCA Summary
 ```
 
-The AI Test Case Generator will eventually consume the FastAPI OpenAPI specification and generate reviewable test suggestions.
+The planned AI Test Case Generator will eventually consume the FastAPI OpenAPI specification and produce reviewable test suggestions.
 
 ---
 
@@ -689,18 +1116,10 @@ The AI Test Case Generator will eventually consume the FastAPI OpenAPI specifica
 
 Ollama is part of the planned local AI environment.
 
-When the AI pipeline is actively developed, verify the installation:
+When the AI pipeline is actively developed, verify installation:
 
 ```powershell
 ollama --version
-```
-
-A model can then be installed according to the model selected for the project.
-
-For example:
-
-```powershell
-ollama pull llama3.1
 ```
 
 List installed models:
@@ -709,17 +1128,25 @@ List installed models:
 ollama list
 ```
 
-The exact model should be finalized based on the evaluation requirements and available local hardware.
+A model can be installed according to the model selected for the project.
+
+For example:
+
+```powershell
+ollama pull llama3.1
+```
+
+The exact model should be finalized based on evaluation requirements and available local hardware.
 
 Do not treat an installed Ollama model as evidence that the AI pipeline itself is implemented.
 
 ---
 
-# Step 11: Docker
+# Docker
 
 Docker is planned for integrated local and CI environments.
 
-The intended environment will eventually contain services such as:
+The intended environment may eventually contain:
 
 ```text
 Mock Payment Gateway
@@ -733,7 +1160,7 @@ Mock Payment Gateway
         +-- Ollama
 ```
 
-When the Docker Compose implementation exists, the expected command will be:
+When the Docker Compose implementation is available, the expected command is:
 
 ```powershell
 docker compose -f docker/docker-compose.yml up -d
@@ -751,7 +1178,7 @@ Stop the Compose environment:
 docker compose -f docker/docker-compose.yml down
 ```
 
-Docker is not currently required for the documented 64-test backend regression suite.
+Docker is not currently required for the core local regression workflow.
 
 ---
 
@@ -771,66 +1198,88 @@ For backend changes:
 python --version
 ```
 
-## 3. Make the change
-
-Keep payment-domain logic separated from:
-
-* FastAPI routing
-* HTTP-specific behavior
-* Storage implementation details
-
-## 4. Run targeted tests
-
-For service changes:
+## 3. Start the backend when required
 
 ```powershell
-pytest tests/unit/test_payment_service.py -v
+uvicorn app.main:app --reload --reload-dir app --port 8000
 ```
 
-For state-machine changes:
+## 4. Start the Dashboard when required
+
+From another terminal:
 
 ```powershell
-pytest tests/unit/test_state_machine.py -v
+cd dashboard
+npm run dev
 ```
 
-For API changes:
+## 5. Run targeted tests
+
+For unit tests:
+
+```powershell
+pytest tests/unit -v
+```
+
+For API tests:
 
 ```powershell
 pytest tests/api -v
 ```
 
-## 5. Run the complete regression suite
+For E2E tests:
+
+```powershell
+pytest tests/e2e -v
+```
+
+## 6. Run the complete regression suite
 
 ```powershell
 pytest -v
 ```
 
-## 6. Inspect the Git working tree
+The current verified baseline is:
+
+```text
+96 passed
+0 failed
+```
+
+## 7. Inspect the Git working tree
 
 ```powershell
 git status
 ```
 
-## 7. Review the actual diff
+## 8. Review the actual diff
 
 ```powershell
 git diff
 ```
 
-## 8. Commit only verified changes
+## 9. Review the diff summary
+
+```powershell
+git diff --stat
+```
+
+## 10. Commit only verified changes
 
 ```powershell
 git add .
 git commit -m "describe the change"
 ```
 
-## 9. Push the commit
+## 11. Push the commit
 
 ```powershell
 git push origin main
 ```
 
-Do not commit a change simply because the application starts. Payment software has a long and unfortunate history of technically functioning software behaving incorrectly.
+Do not commit a change simply because the application starts.
+
+Payment software has a long and unfortunate history of technically functioning software behaving incorrectly.
 
 ---
 
@@ -846,6 +1295,7 @@ OneDrive synchronization may interfere with:
 * Temporary files
 * IDE indexing
 * Uvicorn reload behavior
+* Browser test artifacts
 
 Potential symptoms include:
 
@@ -854,6 +1304,7 @@ Potential symptoms include:
 * Slow dependency operations
 * Changes appearing in Git unexpectedly
 * In-memory transaction data disappearing
+* Intermittent test behavior
 
 If synchronization is interfering with development, temporarily pause OneDrive synchronization while performing the affected operation.
 
@@ -869,7 +1320,7 @@ The recommended development command is:
 uvicorn app.main:app --reload --reload-dir app --port 8000
 ```
 
-The important part is:
+The important configuration is:
 
 ```text
 --reload-dir app
@@ -895,7 +1346,7 @@ when the project is located inside the synchronized directory.
 
 The FastAPI application restarts without intentional changes to application source files.
 
-### Likely cause
+### Likely Cause
 
 Uvicorn is monitoring `.venv`, IDE files, synchronized files, or other project directories.
 
@@ -924,9 +1375,8 @@ Any application restart clears:
 * Cards
 * Transactions
 * Transaction history
-* Other in-memory state
-
-An unintended Uvicorn reload can therefore appear to be a payment-data problem.
+* Audit events
+* Idempotency records
 
 ### Solution
 
@@ -947,7 +1397,7 @@ Persistent database storage is a future architectural phase.
 First run the affected test layer:
 
 ```powershell
-pytest tests/unit/test_payment_service.py -v
+pytest tests/unit -v
 ```
 
 or:
@@ -959,7 +1409,7 @@ pytest tests/api -v
 or:
 
 ```powershell
-pytest tests/unit/test_state_machine.py -v
+pytest tests/e2e -v
 ```
 
 Then run:
@@ -968,11 +1418,127 @@ Then run:
 pytest -v
 ```
 
-Do not consider a targeted test passing sufficient evidence that the complete payment lifecycle remains correct.
+Do not consider a targeted test passing sufficient evidence that the complete payment lifecycle and UI regression suite remain correct.
 
 ---
 
-# 4. Git reports unexpected changes
+# 4. Playwright browser is missing
+
+### Symptom
+
+Pytest detects the Playwright plugin but cannot launch Chromium.
+
+### Solution
+
+Run:
+
+```powershell
+playwright install chromium
+```
+
+Then verify:
+
+```powershell
+pytest tests/e2e -v
+```
+
+---
+
+# 5. E2E tests cannot reach the Dashboard
+
+### Symptom
+
+Playwright tests fail while navigating to:
+
+```text
+http://localhost:5173
+```
+
+### Solution
+
+Verify that the frontend is running.
+
+From the Dashboard directory:
+
+```powershell
+cd dashboard
+npm run dev
+```
+
+Confirm that the Dashboard is accessible at:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# 6. E2E tests cannot reach the backend
+
+### Symptom
+
+E2E fixtures fail while creating cards or transactions through the API.
+
+### Solution
+
+Verify that the backend is running:
+
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+Then verify:
+
+```text
+http://localhost:8000/
+```
+
+and:
+
+```text
+http://localhost:8000/docs
+```
+
+The E2E fixtures use:
+
+```text
+http://localhost:8000
+```
+
+as the backend URL.
+
+---
+
+# 7. Transactions E2E tests fail because no transaction exists
+
+Transaction E2E tests that require backend state use the fixture:
+
+```text
+authorized_transaction
+```
+
+This fixture creates:
+
+1. A fresh active E2E card
+2. An authorized transaction against that card
+
+The fixture uses:
+
+```text
+Merchant:
+e2e-merchant-001
+
+Amount:
+100
+```
+
+If the fixture fails, inspect the backend first.
+
+Do not manually create random application state and assume the test is broken. Humans have enough ways to create mysterious state already.
+
+---
+
+# 8. Git reports unexpected changes
 
 Check:
 
@@ -994,10 +1560,11 @@ Do not blindly commit changes produced by:
 * Test execution
 * Dependency installation
 * Temporary scripts
+* Generated browser artifacts
 
 ---
 
-# 5. Virtual environment is not active
+# 9. Virtual environment is not active
 
 Verify:
 
@@ -1011,7 +1578,7 @@ The path should point to:
 D:\Projects\PayGuard-AI\.venv\Scripts\python.exe
 ```
 
-If it does not, activate the environment:
+If it does not:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -1019,7 +1586,7 @@ If it does not, activate the environment:
 
 ---
 
-# 6. Port 8000 is already in use
+# 10. Port 8000 is already in use
 
 Check which process is using port 8000:
 
@@ -1029,17 +1596,37 @@ netstat -ano | findstr :8000
 
 If another development server is running, stop it before starting another Uvicorn instance.
 
-Alternatively, run the application on another port:
+Alternatively:
 
 ```powershell
 uvicorn app.main:app --reload --reload-dir app --port 8001
 ```
 
-If the frontend expects port 8000, update its API configuration accordingly rather than creating a mysterious networking problem and then blaming the computer.
+If the Dashboard expects port 8000, update its API configuration accordingly.
 
 ---
 
-# 7. Dashboard cannot reach the API
+# 11. Port 5173 is already in use
+
+Check the frontend development server or other process occupying the port.
+
+On Windows:
+
+```powershell
+netstat -ano | findstr :5173
+```
+
+If the Vite development server selects another port, the E2E fixture configuration must be updated to match the actual frontend URL.
+
+The current expected frontend URL is:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# 12. Dashboard cannot reach the API
 
 Verify that the backend is running:
 
@@ -1071,9 +1658,9 @@ Do not modify backend payment logic to solve a frontend configuration problem.
 
 ---
 
-# 8. Dashboard dependency installation fails
+# 13. Dashboard dependency installation fails
 
-From the dashboard directory:
+From the Dashboard directory:
 
 ```powershell
 cd dashboard
@@ -1107,47 +1694,31 @@ Then use the script defined by the project.
 
 ---
 
-# Dependency / Test Client Note
+# 14. Test count changes
 
-The documented backend environment currently contains:
-
-```text
-FastAPI 0.141.1
-Starlette 1.6.0
-HTTPX 0.28.1
-```
-
-The existing environment may produce a TestClient-related deprecation warning associated with the HTTP client dependency.
-
-A warning should not be confused with a test failure.
-
-Before changing FastAPI, Starlette, or HTTPX versions, verify the actual compatibility requirements of the installed stack and run:
-
-```powershell
-pytest -v
-```
-
-Do not downgrade core framework dependencies merely to silence a warning without understanding the compatibility impact.
-
-The functional regression baseline remains:
+The current verified regression baseline is:
 
 ```text
-64 tests
-64 passed
+96 tests
+96 passed
 0 failed
 ```
 
-unless the test suite has intentionally changed.
+The test count may increase as new functionality is implemented.
+
+A changed test count is not automatically a problem.
+
+When tests are added, removed, renamed, or reorganized, update the relevant documentation so that the documented baseline remains consistent with the actual repository.
 
 ---
 
 # Environment Variables
 
-The current documented payment gateway does not require production credentials or external service secrets to run the core regression suite.
+The current payment gateway does not require production credentials or external service secrets to run the core regression suite.
 
 Do not place secrets directly into source files.
 
-If environment variables are introduced in future phases, use a local environment file that is excluded from Git:
+If environment variables are introduced in future phases, use a local environment file excluded from Git:
 
 ```text
 .env
@@ -1162,7 +1733,7 @@ Never commit:
 * Production payment credentials
 * Real cardholder data
 
-The mock gateway should continue to use non-production test data.
+The Mock Payment Gateway should continue to use synthetic non-production data.
 
 ---
 
@@ -1196,6 +1767,8 @@ Use this checklist when setting up or restoring the development environment.
 * [ ] Python executable verified
 * [ ] Backend dependencies installed
 * [ ] Pytest available
+* [ ] Playwright installed
+* [ ] Chromium installed through Playwright
 
 ## Backend
 
@@ -1205,26 +1778,35 @@ Use this checklist when setting up or restoring the development environment.
 * [ ] `http://localhost:8000/docs` loads
 * [ ] `http://localhost:8000/openapi.json` loads
 
-## Tests
-
-* [ ] API tests pass
-* [ ] Payment Service tests pass
-* [ ] State Machine tests pass
-* [ ] Complete regression suite passes
-* [ ] Current documented baseline remains 64 passed
-
 ## Dashboard
 
 * [ ] Node.js installed
 * [ ] npm available
 * [ ] Dashboard dependencies installed
-* [ ] Dashboard starts successfully when required
+* [ ] Dashboard starts successfully
+* [ ] Dashboard available at `http://localhost:5173`
 * [ ] Dashboard can reach the FastAPI backend
-* [ ] Transaction lifecycle renders correctly
+
+## Tests
+
+* [ ] Unit tests pass
+* [ ] API tests pass
+* [ ] E2E tests pass
+* [ ] Complete regression suite passes
+* [ ] Current baseline is verified as `96 passed`
+
+## E2E
+
+* [ ] Chromium installed
+* [ ] Backend running on port 8000
+* [ ] Dashboard running on port 5173
+* [ ] Dashboard smoke test passes
+* [ ] Card E2E test passes
+* [ ] Transactions E2E tests pass
+* [ ] Transaction lifecycle E2E coverage passes
 
 ## Future Components
 
-* [ ] Selenium configured
 * [ ] PostgreSQL configured
 * [ ] Docker configured
 * [ ] Ollama configured
@@ -1251,9 +1833,17 @@ Python 3.11
     |
     +-- Pytest
     |
+    +-- Playwright
+    |
     +-- In-Memory Storage
     |
     +-- Web Dashboard
+    |
+    +-- API Tests
+    |
+    +-- Unit Tests
+    |
+    +-- E2E Tests
 ```
 
 The backend architecture is:
@@ -1268,17 +1858,35 @@ Payment Service
 Payment Domain / State Machine
     |
     v
-Transaction Repository
+Repository Layer
     |
     v
 In-Memory Storage
 ```
 
-The current documented regression baseline is:
+The current E2E architecture is:
 
 ```text
-64 tests
-64 passed
+pytest
+    |
+    v
+Playwright
+    |
+    v
+Page Objects
+    |
+    v
+Dashboard
+    |
+    v
+FastAPI API
+```
+
+The current verified regression baseline is:
+
+```text
+96 tests
+96 passed
 0 failed
 ```
 
@@ -1291,10 +1899,10 @@ Current Payment Foundation
 Payment Reliability
         |
         v
-PostgreSQL
+Persistent Storage
         |
         v
-UI + Selenium
+UI + Playwright
         |
         v
 AI RCA + Test Generation
@@ -1306,9 +1914,7 @@ Docker + CI/CD
 Observability + Security Hardening
 ```
 
-The project is currently paused at the existing backend/frontend checkpoint.
-
-The next architectural phase should be introduced only after its requirements are defined and the corresponding documentation, implementation, and tests are aligned.
+The project should move to each future phase only when its requirements, implementation, tests, and documentation are aligned.
 
 ---
 
@@ -1316,15 +1922,16 @@ The next architectural phase should be introduced only after its requirements ar
 
 The project documentation is organized as follows:
 
-| Document                | Purpose                                            |
-| ----------------------- | -------------------------------------------------- |
-| `docs/PRD.md`           | Product requirements, scope, and success criteria  |
-| `docs/ARCHITECTURE.md`  | System architecture and component interactions     |
-| `docs/TEST_STRATEGY.md` | Testing strategy and regression approach           |
-| `docs/TECH_STACK.md`    | Technology choices and architectural justification |
-| `docs/API_SPEC.md`      | Mock Payment Gateway API contract                  |
-| `docs/AI_PIPELINE.md`   | Planned AI RCA and test-generation architecture    |
-| `docs/SETUP.md`         | Local development and environment setup            |
+| Document                                     | Purpose                                            |
+| -------------------------------------------- | -------------------------------------------------- |
+| `docs/PRD.md`                                | Product requirements, scope, and success criteria  |
+| `docs/ARCHITECTURE.md`                       | System architecture and component interactions     |
+| `docs/TEST_STRATEGY.md`                      | Testing strategy and regression approach           |
+| `docs/TECH_STACK.md`                         | Technology choices and architectural justification |
+| `docs/API_SPEC.md`                           | Mock Payment Gateway API contract                  |
+| `docs/AI_PIPELINE.md`                        | Planned AI RCA and test-generation architecture    |
+| `docs/SETUP.md`                              | Local development and environment setup            |
+| `docs/playwright-vs-selenium-payguard-ai.md` | Playwright vs Selenium evaluation for PayGuard AI  |
 
 These documents should remain consistent with the actual implementation.
 
@@ -1374,22 +1981,22 @@ To remove orphaned containers:
 docker compose -f docker/docker-compose.yml down --remove-orphans
 ```
 
-Docker is currently part of the planned platform architecture rather than a requirement for the core backend regression suite.
+Docker is currently not required for the core local regression suite.
 
 ---
 
 # Final Development Verification
 
-Before considering a backend change complete, execute:
+Before considering a change complete, run:
 
 ```powershell
 pytest -v
 ```
 
-The expected current baseline is:
+The current verified baseline is:
 
 ```text
-64 passed
+96 passed
 0 failed
 ```
 
@@ -1399,30 +2006,36 @@ Then inspect:
 git status
 ```
 
-and:
+Review the complete diff:
 
 ```powershell
 git diff
+```
+
+Review the summary:
+
+```powershell
+git diff --stat
 ```
 
 The repository should contain only intentional changes.
 
 The project should be left in a reproducible state before development is paused again.
 
-That means:
+The desired baseline is:
 
 ```text
-Application code
-        +
+Application Code
+       +
 Tests
-        +
+       +
 Documentation
-        +
-Git history
-        |
-        v
+       +
+Git History
+       |
+       v
 Consistent Development Baseline
 ```
 
-This baseline is more valuable than adding another half-finished feature merely because the roadmap has room for one.
+
 

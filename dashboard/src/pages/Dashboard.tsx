@@ -5,15 +5,11 @@ import {
     useState,
 } from "react"
 
-const API_BASE_URL = "http://127.0.0.1:8000/api/v1"
+import type {
+    TransactionStatus,
+} from "../types/payment"
 
-type TransactionStatus =
-    | "AUTHORIZED"
-    | "DECLINED"
-    | "CAPTURED"
-    | "SETTLED"
-    | "REFUNDED"
-    | "PARTIALLY_REFUNDED"
+const API_BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 type DashboardSummary = {
     total_transactions: number
@@ -56,10 +52,6 @@ type Stat = {
     icon: string
     type: StatType
 }
-
-/* ==========================================================================
-   Utility Functions
-   ========================================================================== */
 
 function toNumber(
     value: number | string | null | undefined,
@@ -211,10 +203,6 @@ function getStatusClass(
     }
 }
 
-/* ==========================================================================
-   API Helpers
-   ========================================================================== */
-
 async function fetchJson<T>(
     url: string,
 ): Promise<T> {
@@ -276,10 +264,6 @@ function normalizeSummary(
     }
 }
 
-/* ==========================================================================
-   Dashboard Component
-   ========================================================================== */
-
 export default function Dashboard() {
     const [summary, setSummary] =
         useState<DashboardSummary | null>(null)
@@ -295,10 +279,6 @@ export default function Dashboard() {
 
     const [lastUpdated, setLastUpdated] =
         useState<Date | null>(null)
-
-    /* ----------------------------------------------------------------------
-       Load dashboard data
-       ---------------------------------------------------------------------- */
 
     const loadDashboard =
         useCallback(async () => {
@@ -380,17 +360,9 @@ export default function Dashboard() {
             }
         }, [])
 
-    /* ----------------------------------------------------------------------
-       Initial load
-       ---------------------------------------------------------------------- */
-
     useEffect(() => {
         void loadDashboard()
     }, [loadDashboard])
-
-    /* ----------------------------------------------------------------------
-       Statistics
-       ---------------------------------------------------------------------- */
 
     const stats: Stat[] = useMemo(() => {
         if (!summary) {
@@ -508,10 +480,6 @@ export default function Dashboard() {
         ]
     }, [summary])
 
-    /* ----------------------------------------------------------------------
-       Recent transactions
-       ---------------------------------------------------------------------- */
-
     const recentTransactions =
         useMemo(
             () =>
@@ -522,16 +490,8 @@ export default function Dashboard() {
             [transactions],
         )
 
-    /* ----------------------------------------------------------------------
-       Render
-       ---------------------------------------------------------------------- */
-
     return (
         <div className="dashboard-page">
-
-            {/* ==============================================================
-                Error
-               ============================================================== */}
 
             {error && (
                 <div className="dashboard-error">
@@ -555,10 +515,6 @@ export default function Dashboard() {
                     </button>
                 </div>
             )}
-
-            {/* ==============================================================
-                Statistics
-               ============================================================== */}
 
             <section className="stats-grid">
                 {stats.map((stat) => (
@@ -597,15 +553,7 @@ export default function Dashboard() {
                 ))}
             </section>
 
-            {/* ==============================================================
-                Main Dashboard
-               ============================================================== */}
-
             <section className="dashboard-grid">
-
-                {/* ----------------------------------------------------------
-                    Recent Transactions
-                   ---------------------------------------------------------- */}
 
                 <article className="panel transaction-panel">
 
@@ -712,58 +660,58 @@ export default function Dashboard() {
                                             }
                                         >
                                             <td>
-                                                <span className="transaction-id">
-                                                    {
-                                                        transaction.transaction_id
-                                                    }
-                                                </span>
+                                                    <span className="transaction-id">
+                                                        {
+                                                            transaction.transaction_id
+                                                        }
+                                                    </span>
                                             </td>
 
                                             <td>
-                                                <span className="merchant-name">
-                                                    {
-                                                        transaction.merchant_id ||
-                                                        "—"
-                                                    }
-                                                </span>
+                                                    <span className="merchant-name">
+                                                        {
+                                                            transaction.merchant_id ||
+                                                            "—"
+                                                        }
+                                                    </span>
                                             </td>
 
                                             <td>
-                                                <span className="payment-network">
-                                                    {
-                                                        transaction.method
-                                                    }
-                                                </span>
+                                                    <span className="payment-network">
+                                                        {
+                                                            transaction.method
+                                                        }
+                                                    </span>
                                             </td>
 
                                             <td>
-                                                <span className="transaction-amount">
-                                                    {formatCurrency(
-                                                        transaction.amount,
-                                                    )}
-                                                </span>
+                                                    <span className="transaction-amount">
+                                                        {formatCurrency(
+                                                            transaction.amount,
+                                                        )}
+                                                    </span>
                                             </td>
 
                                             <td>
-                                                <span
-                                                    className={`transaction-status ${getStatusClass(
-                                                        transaction.status,
-                                                    )}`}
-                                                >
-                                                    <span className="status-dot" />
+                                                    <span
+                                                        className={`transaction-status ${getStatusClass(
+                                                            transaction.status,
+                                                        )}`}
+                                                    >
+                                                        <span className="status-dot" />
 
-                                                    {
-                                                        transaction.status
-                                                    }
-                                                </span>
+                                                        {
+                                                            transaction.status
+                                                        }
+                                                    </span>
                                             </td>
 
                                             <td>
-                                                <span className="transaction-time">
-                                                    {
-                                                        transaction.time
-                                                    }
-                                                </span>
+                                                    <span className="transaction-time">
+                                                        {
+                                                            transaction.time
+                                                        }
+                                                    </span>
                                             </td>
                                         </tr>
                                     ),
@@ -777,11 +725,10 @@ export default function Dashboard() {
 
                 </article>
 
-                {/* ----------------------------------------------------------
-                    System Health
-                   ---------------------------------------------------------- */}
-
-                <aside className="panel system-panel">
+                <aside
+                    className="panel system-panel"
+                    data-testid="system-health"
+                >
 
                     <div className="panel-header">
                         <div>
@@ -796,9 +743,15 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="health-list">
+                    <div
+                        className="health-list"
+                        data-testid="health-list"
+                    >
 
-                        <div className="health-row">
+                        <div
+                            className="health-row"
+                            data-testid="health-payment-gateway"
+                        >
                             <div className="health-service">
                                 <span className="service-indicator online" />
 
@@ -813,12 +766,18 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            <span className="health-state">
+                            <span
+                                className="health-state"
+                                data-testid="health-payment-gateway-state"
+                            >
                                 Operational
                             </span>
                         </div>
 
-                        <div className="health-row">
+                        <div
+                            className="health-row"
+                            data-testid="health-transaction-service"
+                        >
                             <div className="health-service">
                                 <span className="service-indicator online" />
 
@@ -833,12 +792,18 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            <span className="health-state">
+                            <span
+                                className="health-state"
+                                data-testid="health-transaction-service-state"
+                            >
                                 Operational
                             </span>
                         </div>
 
-                        <div className="health-row">
+                        <div
+                            className="health-row"
+                            data-testid="health-storage"
+                        >
                             <div className="health-service">
                                 <span className="service-indicator online" />
 
@@ -853,12 +818,18 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            <span className="health-state">
+                            <span
+                                className="health-state"
+                                data-testid="health-storage-state"
+                            >
                                 Operational
                             </span>
                         </div>
 
-                        <div className="health-row">
+                        <div
+                            className="health-row"
+                            data-testid="health-ai-engine"
+                        >
                             <div className="health-service">
                                 <span className="service-indicator pending" />
 
@@ -873,7 +844,10 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            <span className="health-state pending">
+                            <span
+                                className="health-state pending"
+                                data-testid="health-ai-engine-state"
+                            >
                                 Planned
                             </span>
                         </div>
@@ -906,10 +880,6 @@ export default function Dashboard() {
 
             </section>
 
-            {/* ==============================================================
-                Quick Actions
-               ============================================================== */}
-
             <section className="quick-actions">
 
                 <div>
@@ -929,6 +899,18 @@ export default function Dashboard() {
                     <button
                         type="button"
                         className="action-button primary"
+                        onClick={() => {
+                            window.dispatchEvent(
+                                new CustomEvent(
+                                    "payguard:navigate",
+                                    {
+                                        detail: {
+                                            page: "cards",
+                                        },
+                                    },
+                                ),
+                            )
+                        }}
                     >
                         + Issue Card
                     </button>
@@ -936,6 +918,7 @@ export default function Dashboard() {
                     <button
                         type="button"
                         className="action-button"
+                        disabled
                     >
                         Authorize Payment
                     </button>
@@ -943,6 +926,7 @@ export default function Dashboard() {
                     <button
                         type="button"
                         className="action-button"
+                        disabled
                     >
                         Simulate Failure
                     </button>

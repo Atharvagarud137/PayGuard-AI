@@ -11,7 +11,7 @@ The planned AI capabilities are:
 1. **AI-assisted Root Cause Analysis (RCA)** for test failures
 2. **AI-assisted Test Case Generation** from the Mock Payment Gateway's OpenAPI specification
 
-The AI layer is intentionally planned after the payment-domain and reliability foundation. The current Mock Payment Gateway, transaction lifecycle, service layer, repository abstraction, and automated regression suite provide the deterministic foundation that the AI layer will eventually analyze.
+The AI layer is intentionally positioned after the payment-domain, API, E2E, reliability, and observability foundations. The deterministic testing infrastructure provides the data that the AI layer will eventually analyze.
 
 > **Current status:** The AI pipelines described in this document are architectural designs and are not yet implemented.
 
@@ -24,28 +24,28 @@ The planned AI architecture consists of two independent workflows.
 ```text
                          PayGuard AI
                               |
-              ┌───────────────┴───────────────┐
-              │                               │
-              ▼                               ▼
-       Root Cause Analysis            Test Case Generator
-              │                               │
-              ▼                               ▼
+              ┌───────────────┴────────────────┐
+              │                                │
+              ▼                                ▼
+       Root Cause Analysis             Test Case Generator
+              │                                │
+              ▼                                ▼
        Test Failure Data              OpenAPI Specification
-              │                               │
-              ▼                               ▼
-       Context Extraction             Endpoint Analysis
-              │                               │
-              ▼                               ▼
+              │                                │
+              ▼                                ▼
+       Context Extraction              Endpoint Analysis
+              │                                │
+              ▼                                ▼
        Embedding / Retrieval             LLM Analysis
-              │                               │
-              ▼                               ▼
-          ChromaDB                    Scenario Suggestions
-              │                               │
-              ▼                               ▼
-       Local LLM via Ollama             Human Review
+              │                                │
+              ▼                                ▼
+           ChromaDB                    Scenario Suggestions
+              │                                │
+              ▼                                ▼
+       Local LLM via Ollama                Human Review
               │
               ▼
-        RCA Report
+          RCA Report
 ````
 
 The two pipelines solve different problems:
@@ -53,7 +53,7 @@ The two pipelines solve different problems:
 | Pipeline       | Input                                                     | Output                    | Primary Goal                        |
 | -------------- | --------------------------------------------------------- | ------------------------- | ----------------------------------- |
 | RCA            | Test failure, logs, stack trace, request/response context | Root cause summary        | Reduce failure-investigation effort |
-| Test Generator | OpenAPI specification and existing test context           | Test scenario suggestions | Identify missing edge cases         |
+| Test Generator | OpenAPI specification and existing test context           | Test scenario suggestions | Identify meaningful coverage gaps   |
 
 ---
 
@@ -63,7 +63,7 @@ The AI layer is currently **planned**.
 
 No AI-generated RCA or test-case output should currently be treated as part of the project's implemented functionality.
 
-### Current foundation
+## Current Deterministic Foundation
 
 The following capabilities already provide the inputs required for the future AI layer:
 
@@ -83,16 +83,26 @@ The following capabilities already provide the inputs required for the future AI
 * Automated API tests
 * Automated service tests
 * Automated state-machine tests
+* Idempotency validation
+* Audit-event validation
+* Web Dashboard
+* Playwright E2E testing
+* API-backed E2E fixtures
+* Transaction lifecycle UI validation
 
-The current regression baseline is:
+The current full regression baseline is:
 
 ```text
-36 API tests
-14 Payment Service tests
-14 State Machine tests
------------------------
-64 total tests
-64 passed
+96 tests collected
+96 passed
+0 failed
+```
+
+The current Playwright E2E baseline is:
+
+```text
+4 tests
+4 passed
 0 failed
 ```
 
@@ -148,6 +158,8 @@ The system should not automatically:
 * Merge generated tests
 * Suppress failures
 * Declare a root cause as confirmed without supporting evidence
+* Alter transaction state
+* Change CI results
 
 This is particularly important for payment-system testing, where a plausible but incorrect explanation can be more dangerous than an obvious failure.
 
@@ -232,7 +244,9 @@ The system should use:
 * Response data where available
 * HTTP status code where applicable
 * Test execution metadata
+* Browser diagnostics for UI/E2E failures where available
 * Historical similar failures
+* Transaction and correlation identifiers where available
 
 The resulting report should identify:
 
@@ -241,6 +255,7 @@ The resulting report should identify:
 3. Evidence supporting the conclusion
 4. Similar historical failures
 5. Suggested investigation or corrective action
+6. Confidence level
 
 ---
 
@@ -290,19 +305,19 @@ RCA Report
 
 # RCA Step-by-Step Design
 
-| Step | Component             | Responsibility                                               | Status                     |
-| ---: | --------------------- | ------------------------------------------------------------ | -------------------------- |
-|    1 | Test Execution        | Execute Pytest/Selenium tests                                | Current / Selenium planned |
-|    2 | Failure Capture       | Capture failed test metadata and diagnostics                 | Planned                    |
-|    3 | Context Extraction    | Extract relevant failure information                         | Planned                    |
-|    4 | Failure Normalization | Convert failure information into a consistent representation | Planned                    |
-|    5 | Embedding Generation  | Convert failure context into a vector representation         | Planned                    |
-|    6 | ChromaDB Retrieval    | Retrieve similar historical failures                         | Planned                    |
-|    7 | Context Assembly      | Combine current and historical failure context               | Planned                    |
-|    8 | LLM Analysis          | Generate an evidence-based RCA                               | Planned                    |
-|    9 | Output Validation     | Evaluate whether the RCA is supported by available evidence  | Planned                    |
-|   10 | Report Generation     | Produce a human-readable RCA report                          | Planned                    |
-|   11 | Historical Storage    | Store the failure and RCA for future retrieval               | Planned                    |
+| Step | Component             | Responsibility                                               | Status      |
+| ---: | --------------------- | ------------------------------------------------------------ | ----------- |
+|    1 | Test Execution        | Execute Pytest and Playwright tests                          | Implemented |
+|    2 | Failure Capture       | Capture failed test metadata and diagnostics                 | Planned     |
+|    3 | Context Extraction    | Extract relevant failure information                         | Planned     |
+|    4 | Failure Normalization | Convert failure information into a consistent representation | Planned     |
+|    5 | Embedding Generation  | Convert failure context into a vector representation         | Planned     |
+|    6 | ChromaDB Retrieval    | Retrieve similar historical failures                         | Planned     |
+|    7 | Context Assembly      | Combine current and historical failure context               | Planned     |
+|    8 | LLM Analysis          | Generate an evidence-based RCA                               | Planned     |
+|    9 | Output Validation     | Evaluate whether the RCA is supported by available evidence  | Planned     |
+|   10 | Report Generation     | Produce a human-readable RCA report                          | Planned     |
+|   11 | Historical Storage    | Store the failure and RCA for future retrieval               | Planned     |
 
 ---
 
@@ -328,7 +343,22 @@ A conceptual failure record is:
   "actual": "500",
   "error_message": "AssertionError",
   "stack_trace": "...",
-  "environment": "local"
+  "environment": "local",
+  "git_commit": "<COMMIT_SHA>"
+}
+```
+
+For Playwright failures, the conceptual model may additionally contain:
+
+```json
+{
+  "test_layer": "e2e",
+  "browser": "chromium",
+  "page_url": "http://localhost:5173/transactions",
+  "page_object": "TransactionsPage",
+  "locator": "<RELEVANT_LOCATOR>",
+  "screenshot": "<ARTIFACT_REFERENCE>",
+  "trace": "<ARTIFACT_REFERENCE>"
 }
 ```
 
@@ -373,20 +403,23 @@ This should be implemented carefully because over-normalization can remove infor
 
 The initial RCA classifier should use a controlled set of categories.
 
-| Category                 | Example                                           |
-| ------------------------ | ------------------------------------------------- |
-| Timeout                  | `X-Simulate-Failure: TIMEOUT`                     |
-| Network Error            | `X-Simulate-Failure: NETWORK_ERROR`               |
-| Invalid Response         | Simulated invalid server response                 |
-| Validation Error         | Missing or malformed request data                 |
-| Business Rule Violation  | Capture or refund exceeds allowed amount          |
-| Invalid State Transition | Settlement attempted before capture               |
-| Authorization Decline    | Insufficient funds or inactive card               |
-| Assertion Mismatch       | Actual API behavior differs from test expectation |
-| Persistence Error        | Database transaction or storage failure           |
-| Concurrency Error        | Conflicting simultaneous operations               |
-| Environment Issue        | Service unavailable or dependency failure         |
-| Unknown                  | Evidence is insufficient to determine the cause   |
+| Category                 | Example                                             |
+| ------------------------ | --------------------------------------------------- |
+| Timeout                  | `X-Simulate-Failure: TIMEOUT`                       |
+| Network Error            | `X-Simulate-Failure: NETWORK_ERROR`                 |
+| Invalid Response         | Simulated invalid server response                   |
+| Validation Error         | Missing or malformed request data                   |
+| Business Rule Violation  | Capture or refund exceeds allowed amount            |
+| Invalid State Transition | Settlement attempted before capture                 |
+| Authorization Decline    | Insufficient funds or inactive card                 |
+| Idempotency Conflict     | Same key reused for a different request             |
+| Assertion Mismatch       | Actual behavior differs from test expectation       |
+| UI Assertion Failure     | Expected dashboard state is not visible             |
+| Browser / E2E Failure    | Navigation, locator, or browser interaction failure |
+| Persistence Error        | Database transaction or storage failure             |
+| Concurrency Error        | Conflicting simultaneous operations                 |
+| Environment Issue        | Service unavailable or dependency failure           |
+| Unknown                  | Evidence is insufficient to determine the cause     |
 
 The category list should evolve as the project introduces persistence, concurrency, CI/CD, and additional infrastructure.
 
@@ -400,6 +433,7 @@ A conceptual prompt structure is:
 
 ```text
 SYSTEM
+
 You are analyzing an automated payment-system test failure.
 
 Your job is to identify the most likely root cause using only the
@@ -416,6 +450,9 @@ Test:
 
 Test Layer:
 {test_layer}
+
+Component:
+{component}
 
 Endpoint:
 {endpoint}
@@ -434,6 +471,9 @@ Error:
 
 Stack Trace:
 {stack_trace}
+
+Additional Diagnostics:
+{diagnostics}
 
 HISTORICAL SIMILAR FAILURES
 
@@ -525,27 +565,27 @@ AI-generated RCA output requires its own validation.
 
 Future validation should check:
 
-### Category Accuracy
+## Category Accuracy
 
 Was the failure assigned to the correct category?
 
-### Evidence Consistency
+## Evidence Consistency
 
 Does the explanation match the actual failure information?
 
-### Unsupported Claims
+## Unsupported Claims
 
 Did the LLM introduce facts that are not present in the supplied evidence?
 
-### Historical Relevance
+## Historical Relevance
 
 Were retrieved failures actually similar to the current failure?
 
-### Actionability
+## Actionability
 
 Does the recommended investigation help an engineer determine the next step?
 
-### Reproducibility
+## Reproducibility
 
 Can the explanation be produced consistently for deterministic failures?
 
@@ -568,6 +608,7 @@ The evaluation dataset should contain known failures such as:
 * Invalid lifecycle state
 * Capture amount violation
 * Refund amount violation
+* Idempotency conflict
 * Assertion mismatch
 * Missing transaction
 * Environment failure
@@ -590,6 +631,9 @@ The generator will analyze:
 * Validation constraints
 * Transaction lifecycle rules
 * Existing tests
+* Existing E2E tests
+* Idempotency behavior
+* Failure simulation capabilities
 * Previously generated suggestions
 
 The output will be a reviewable list of candidate scenarios.
@@ -605,28 +649,28 @@ FastAPI OpenAPI Specification
        Endpoint Extraction
               |
               v
-       Schema Analysis
+         Schema Analysis
               |
               v
        Existing Test Analysis
               |
               v
-       Coverage Gap Analysis
+        Coverage Gap Analysis
               |
               v
-        LLM Generation
+          LLM Generation
               |
               v
-       Deduplication
+          Deduplication
               |
               v
-     Scenario Validation
+       Scenario Validation
               |
               v
-       Markdown Report
+         Markdown Report
               |
               v
-         Human Review
+          Human Review
 ```
 
 ---
@@ -652,23 +696,25 @@ FastAPI OpenAPI Specification
 
 The generator should consider multiple classes of test scenarios.
 
-| Category           | Example                                               |
-| ------------------ | ----------------------------------------------------- |
-| Boundary Value     | Authorization amount exactly equals available balance |
-| Lower Boundary     | Minimum permitted transaction amount                  |
-| Upper Boundary     | Maximum permitted transaction amount                  |
-| Missing Field      | Omit required `merchant_id`                           |
-| Invalid Type       | Send a string where a numeric amount is required      |
-| Invalid Enum       | Unsupported card network                              |
-| Invalid State      | Settlement before capture                             |
-| Repeated Operation | Capture the same transaction twice                    |
-| Refund Boundary    | Refund exactly the remaining refundable amount        |
-| Refund Overflow    | Refund one unit beyond the remaining amount           |
-| Resource Error     | Use a nonexistent transaction ID                      |
-| Failure Simulation | Execute endpoint with `X-Simulate-Failure`            |
-| Concurrency        | Submit two capture requests simultaneously            |
-| Idempotency        | Repeat an operation with the same idempotency key     |
-| Persistence        | Verify transaction state after application restart    |
+| Category             | Example                                               |
+| -------------------- | ----------------------------------------------------- |
+| Boundary Value       | Authorization amount exactly equals available balance |
+| Lower Boundary       | Minimum permitted transaction amount                  |
+| Upper Boundary       | Maximum permitted transaction amount                  |
+| Missing Field        | Omit required `merchant_id`                           |
+| Invalid Type         | Send a string where a numeric amount is required      |
+| Invalid Enum         | Unsupported card network                              |
+| Invalid State        | Settlement before capture                             |
+| Repeated Operation   | Capture the same transaction twice                    |
+| Refund Boundary      | Refund exactly the remaining refundable amount        |
+| Refund Overflow      | Refund one unit beyond the remaining amount           |
+| Resource Error       | Use a nonexistent transaction ID                      |
+| Failure Simulation   | Execute endpoint with `X-Simulate-Failure`            |
+| Idempotency          | Repeat an operation with the same idempotency key     |
+| Idempotency Conflict | Reuse an idempotency key with different request data  |
+| Concurrency          | Submit two capture requests simultaneously            |
+| Persistence          | Verify transaction state after application restart    |
+| UI State             | Verify lifecycle visualization matches backend state  |
 
 Not every category will be applicable to every endpoint.
 
@@ -708,7 +754,9 @@ The generator should prefer scenarios that:
 * Explore an untested boundary
 * Validate a meaningful negative path
 * Test an important state transition
+* Validate idempotency behavior
 * Expose a realistic reliability risk
+* Validate an important UI/API contract where appropriate
 
 It should avoid producing large numbers of trivial variations merely to inflate the test count.
 
@@ -795,7 +843,7 @@ Generated
 
 The acceptance rate should be tracked separately from the raw number of generated scenarios.
 
-Generating 100 useless tests is not better than generating 10 useful ones. Humanity has already demonstrated this repeatedly with software requirements documents.
+Generating 100 useless tests is not better than generating 10 useful ones.
 
 ---
 
@@ -815,7 +863,7 @@ Potential metadata:
 | ------------------ | ------------------------------------------ |
 | `failure_id`       | Unique failure identifier                  |
 | `test_name`        | Failed test                                |
-| `test_layer`       | API, service, state machine, UI, etc.      |
+| `test_layer`       | API, service, state machine, E2E, etc.     |
 | `endpoint`         | Related API endpoint                       |
 | `failure_category` | Classified failure category                |
 | `timestamp`        | Failure occurrence time                    |
@@ -1002,6 +1050,7 @@ The AI should not directly:
 * Approve deployments
 * Merge pull requests
 * Alter CI results
+* Change test expectations to make failures disappear
 
 Any future automation beyond reporting should be explicitly designed and validated before being enabled.
 
@@ -1025,21 +1074,21 @@ Automated Tests
    |         |
    v         v
 Continue   Failure Artifacts
-             |
-             v
-          RCA Job
-             |
-             v
-        ChromaDB Retrieval
-             |
-             v
-          Ollama LLM
-             |
-             v
-         RCA Report
-             |
-             v
-       CI Artifact
+              |
+              v
+           RCA Job
+              |
+              v
+         ChromaDB Retrieval
+              |
+              v
+           Ollama LLM
+              |
+              v
+          RCA Report
+              |
+              v
+          CI Artifact
 ```
 
 The RCA job should run only when useful failure artifacts are available.
@@ -1062,25 +1111,25 @@ Conceptually:
 Manual / Scheduled Trigger
           |
           v
-   Running API Gateway
+    Running API Gateway
           |
           v
-     OpenAPI Spec
+       OpenAPI Spec
           |
           v
-   Existing Test Analysis
+    Existing Test Analysis
           |
           v
-      LLM Generator
+       LLM Generator
           |
           v
-   Deduplication / Validation
+    Deduplication / Validation
           |
           v
- test_suggestions.md
+     test_suggestions.md
           |
           v
-      Human Review
+       Human Review
 ```
 
 The generator should not automatically add generated tests to the repository during the initial implementation.
@@ -1172,6 +1221,7 @@ The AI environment should use:
 * Non-production merchant identifiers
 * Sanitized request/response payloads
 * Sanitized stack traces
+* Sanitized browser diagnostics
 
 Sensitive values should be redacted before persistence or embedding.
 
@@ -1206,7 +1256,7 @@ The RCA pipeline is designed to improve through accumulated historical data.
 Test Failure
      |
      v
-RCA
+    RCA
      |
      v
 Human Review
@@ -1230,7 +1280,7 @@ The same principle applies to test generation:
 Generated Suggestion
         |
         v
-Human Review
+   Human Review
         |
    ┌────┴────┐
    v         v
@@ -1258,6 +1308,9 @@ The AI layer depends on several capabilities that are not currently implemented.
 | Automated regression suite       | Failure source               | Implemented |
 | Deterministic failure simulation | RCA evaluation               | Implemented |
 | Transaction history              | Payment lifecycle context    | Implemented |
+| Idempotency behavior             | Reliability/RCA context      | Implemented |
+| Audit events                     | Diagnostic context           | Implemented |
+| Playwright E2E tests             | UI failure source            | Implemented |
 | Persistent storage               | Durable AI context           | Planned     |
 | Failure artifact collection      | RCA input                    | Planned     |
 | ChromaDB                         | Historical retrieval         | Planned     |
@@ -1324,14 +1377,16 @@ This ordering prevents the AI layer from becoming a substitute for missing relia
 | Component                  | Current Status | Planned Role                                |
 | -------------------------- | -------------- | ------------------------------------------- |
 | Pytest                     | Implemented    | Source of automated test failures           |
-| Selenium                   | Planned        | Future UI failure source                    |
+| Playwright                 | Implemented    | UI/E2E failure source                       |
+| Page Object Model          | Implemented    | Structured UI failure context               |
+| API-backed E2E fixtures    | Implemented    | Deterministic E2E setup                     |
 | Structured Failure Records | Planned        | Standard RCA input                          |
 | Embeddings                 | Planned        | Semantic failure representation             |
 | ChromaDB                   | Planned        | Historical failure and suggestion retrieval |
 | Ollama                     | Planned        | Local LLM runtime                           |
 | Local LLM                  | Planned        | RCA and test-scenario generation            |
 | LangChain                  | Planned        | LLM/RAG orchestration                       |
-| LangGraph                  | Planned        | Multi-step AI workflow orchestration        |
+| LangGraph                  | Planned        | AI workflow orchestration                   |
 | OpenTelemetry              | Planned        | AI and application observability            |
 | GitHub Actions             | Planned        | Automated AI workflow execution             |
 
@@ -1384,31 +1439,31 @@ These targets should be revised after a representative evaluation dataset exists
 
 The planned AI architecture has several limitations.
 
-### Local Model Quality
+## Local Model Quality
 
 Small local models may produce less accurate or less detailed results than larger hosted models.
 
-### Retrieval Quality
+## Retrieval Quality
 
 Poor embeddings or irrelevant historical data can result in misleading context.
 
-### Hallucination
+## Hallucination
 
 An LLM may generate plausible explanations that are not supported by the actual failure.
 
-### Test Generation Accuracy
+## Test Generation Accuracy
 
 A generated scenario may appear reasonable while contradicting the actual payment-domain implementation.
 
-### Evaluation Difficulty
+## Evaluation Difficulty
 
 RCA quality is not fully captured by a simple exact-match metric.
 
-### Historical Data Dependency
+## Historical Data Dependency
 
 The RCA system becomes more useful as high-quality historical failure data accumulates.
 
-### Infrastructure Complexity
+## Infrastructure Complexity
 
 ChromaDB, Ollama, embeddings, observability, and CI integration introduce additional operational complexity.
 
@@ -1430,6 +1485,8 @@ The final intended boundary is:
 │ Repository                              │
 │ PostgreSQL                              │
 │ Pytest                                  │
+│ Playwright                              │
+│ Web Dashboard                           │
 └────────────────────┬────────────────────┘
                      |
                      | Test Results / API Spec
@@ -1463,7 +1520,7 @@ The AI layer exists to make the testing process more intelligent, explainable, a
 
 # Current AI Pipeline Status
 
-### Completed Foundation
+## Completed Foundation
 
 * [x] Mock Payment Gateway
 * [x] Payment transaction lifecycle
@@ -1475,8 +1532,14 @@ The AI layer exists to make the testing process more intelligent, explainable, a
 * [x] Automated service tests
 * [x] Automated state-machine tests
 * [x] Deterministic failure simulation
+* [x] Idempotency validation
+* [x] Audit-event validation
+* [x] Web Dashboard
+* [x] Playwright E2E testing
+* [x] API-backed E2E fixtures
+* [x] Transaction lifecycle UI validation
 
-### Planned
+## Planned
 
 * [ ] Structured failure artifact collection
 * [ ] Failure normalization
@@ -1494,6 +1557,56 @@ The AI layer exists to make the testing process more intelligent, explainable, a
 * [ ] AI observability
 * [ ] GitHub Actions AI workflow
 * [ ] Historical failure feedback loop
+
+---
+
+# AI Implementation Roadmap
+
+The AI implementation should follow the project's broader QA maturity roadmap.
+
+```text
+Current
+  |
+  ├── Deterministic Payment Tests
+  ├── API Tests
+  ├── Idempotency Tests
+  ├── Audit Validation
+  └── Playwright E2E Tests
+          |
+          v
+Phase 1
+  Structured Failure Artifacts
+          |
+          v
+Phase 2
+  Failure Normalization + Embeddings
+          |
+          v
+Phase 3
+  ChromaDB Historical Retrieval
+          |
+          v
+Phase 4
+  Ollama + Local LLM
+          |
+          v
+Phase 5
+  RCA Generation + Evaluation
+          |
+          v
+Phase 6
+  OpenAPI Test Generation
+          |
+          v
+Phase 7
+  Human Feedback + Historical Learning
+          |
+          v
+Phase 8
+  CI/CD Integration
+```
+
+The AI roadmap should not move ahead of the deterministic testing and observability foundations.
 
 ---
 
@@ -1522,6 +1635,3 @@ Evidence-Based Analysis
 Human Validation
 ```
 
-The AI layer should make an already reliable QA system more capable of understanding failures and discovering meaningful test scenarios.
-
-It should not be used to hide unreliable engineering underneath a layer of impressive-looking AI output. That would be the software equivalent of putting a spoiler on a car with no engine.

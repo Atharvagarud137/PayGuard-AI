@@ -6,12 +6,15 @@ This document describes the technology stack used by PayGuard AI, the role of ea
 
 The stack is intentionally divided into **currently implemented technologies** and **planned technologies**. A dependency being installed in the development environment does not necessarily mean that it is currently part of the implemented application architecture.
 
-PayGuard AI combines two primary engineering areas:
+PayGuard AI combines three primary engineering areas:
 
-1. **Payment-domain software engineering and test automation**
-2. **Applied AI for intelligent test analysis and test generation**
+1. **Payment-domain software engineering**
+2. **Automated quality engineering and browser validation**
+3. **Applied AI for intelligent test analysis and test generation**
 
-The project is being developed incrementally. The current priority is to establish a reliable payment-domain foundation, followed by persistence and reliability controls, before introducing the broader UI automation and AI layers. Humanity has somehow decided that adding an LLM before making the database trustworthy is a good idea, so this separation is deliberate.
+The project is being developed incrementally. The current implementation already includes the payment domain, reliability controls such as monetary precision and idempotency, a React/TypeScript dashboard, and Playwright-based E2E automation. The next major architectural stage is durable persistence and stronger concurrency guarantees.
+
+Humanity has somehow decided that an LLM should analyze systems before those systems can reliably explain themselves, so the architecture deliberately puts correctness first.
 
 ---
 
@@ -19,30 +22,36 @@ The project is being developed incrementally. The current priority is to establi
 
 ## Backend / System Under Test
 
-| Technology                 | Purpose                         | Status      | Why Chosen                                                                                                                                               |
-| -------------------------- | ------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Python 3.11**            | Core application language       | Implemented | Strong ecosystem for backend development, testing, automation, and AI engineering                                                                        |
-| **FastAPI**                | Mock Payment Gateway framework  | Implemented | Provides automatic OpenAPI documentation, request validation through Pydantic, and a lightweight architecture suitable for the simulated payment gateway |
-| **Pydantic**               | Request and response validation | Implemented | Provides structured validation for payment API payloads and integrates naturally with FastAPI                                                            |
-| **Uvicorn**                | ASGI application server         | Implemented | Lightweight and suitable for running the FastAPI development server                                                                                      |
-| **In-Memory Storage**      | Current application persistence | Implemented | Keeps the initial payment-domain implementation simple and deterministic while the domain and service architecture are being validated                   |
-| **Transaction Repository** | Persistence abstraction         | Implemented | Separates payment business logic from the underlying storage implementation and provides a migration path toward PostgreSQL                              |
+| Technology | Purpose | Status | Why Chosen |
+|---|---|---|---|
+| **Python 3.11** | Core application language | Implemented | Strong ecosystem for backend development, testing, automation, and AI engineering |
+| **FastAPI** | Mock Payment Gateway framework | Implemented | Provides automatic OpenAPI documentation, request validation through Pydantic, and a lightweight architecture suitable for the simulated payment gateway |
+| **Pydantic** | Request and response validation | Implemented | Provides structured validation for payment API payloads and integrates naturally with FastAPI |
+| **Uvicorn** | ASGI application server | Implemented | Lightweight server for running the FastAPI application |
+| **In-Memory Storage** | Current persistence implementation | Implemented | Keeps the current payment-domain implementation deterministic while the repository and service architecture are being validated |
+| **Transaction Repository** | Persistence abstraction | Implemented | Separates payment business logic from the underlying storage implementation and provides a migration path toward PostgreSQL |
 
 ---
 
 # Payment Domain Architecture
 
-The payment engine currently uses several architectural patterns and domain components in addition to the framework stack.
+The payment engine uses several architectural patterns and domain components in addition to the framework stack.
 
-| Component                        | Purpose                         | Status      | Why Used                                                                                                                                 |
-| -------------------------------- | ------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Payment Service**              | Payment business logic          | Implemented | Keeps capture, settlement, and refund rules outside the HTTP layer                                                                       |
-| **Transaction State Machine**    | Payment lifecycle validation    | Implemented | Provides a centralized mechanism for validating legal transaction state transitions                                                      |
-| **Domain Exceptions**            | Payment-specific error handling | Implemented | Allows business logic to communicate typed domain failures without depending on HTTP-specific exceptions                                 |
-| **Repository Pattern**           | Persistence abstraction         | Implemented | Allows the current in-memory implementation to be replaced with persistent storage without tightly coupling business logic to a database |
-| **Transaction History / Events** | Transaction traceability        | Implemented | Records important lifecycle events associated with a transaction                                                                         |
+| Component | Purpose | Status | Why Used |
+|---|---|---|---|
+| **Payment Service** | Payment business logic | Implemented | Keeps authorization, capture, settlement, and refund rules outside the HTTP layer |
+| **Transaction State Machine** | Payment lifecycle validation | Implemented | Centralizes validation of legal transaction state transitions |
+| **Domain Exceptions** | Payment-specific error handling | Implemented | Allows business logic to communicate typed domain failures without depending on HTTP-specific exceptions |
+| **Repository Pattern** | Persistence abstraction | Implemented | Allows the current in-memory implementation to be replaced with persistent storage without tightly coupling business logic to a database |
+| **Transaction History / Events** | Transaction traceability | Implemented | Records important lifecycle events associated with a transaction |
+| **Audit Events** | Operational and security history | Implemented | Records important payment operations without storing raw card numbers |
+| **Monetary Precision** | Financial calculation correctness | Implemented | Uses decimal-safe monetary handling rather than relying on binary floating-point arithmetic |
+| **Idempotency** | Duplicate-request protection | Implemented | Prevents repeated requests using the same idempotency key from creating duplicate operations |
+| **Failure Simulation** | Technical failure testing | Implemented | Provides deterministic failure scenarios for payment-system testing |
 
-## Current Payment Lifecycle
+---
+
+# Current Payment Lifecycle
 
 ```text
 AUTHORIZED
@@ -60,7 +69,7 @@ PARTIALLY_REFUNDED      REFUNDED
     |
     v
 REFUNDED
-```
+````
 
 The domain model explicitly validates valid and invalid transitions.
 
@@ -72,6 +81,7 @@ The lifecycle currently supports:
 * Full refund
 * Partial refund
 * Completion of remaining refund amounts
+* Deterministic technical failure scenarios
 
 Invalid transitions are rejected by the domain state machine.
 
@@ -91,6 +101,8 @@ The current Mock Payment Gateway exposes the core payment operations used by the
 | **Partial Refund**      | Implemented | Refunds part of the settled amount                    |
 | **Transaction Lookup**  | Implemented | Retrieves transaction state and lifecycle information |
 | **Transaction History** | Implemented | Records lifecycle events associated with transactions |
+| **Audit Events**        | Implemented | Records operational events without raw card numbers   |
+| **Idempotency**         | Implemented | Prevents duplicate operations for repeated requests   |
 | **Failure Simulation**  | Implemented | Supports deterministic technical failure scenarios    |
 
 The current payment flow is intentionally simulated and does not connect to real card networks or production payment processors.
@@ -99,49 +111,87 @@ The current payment flow is intentionally simulated and does not connect to real
 
 # Test Automation Stack
 
-| Technology                           | Purpose                                       | Status      | Why Chosen                                                                                   |
-| ------------------------------------ | --------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| **Pytest**                           | Unit, service, state-machine, and API testing | Implemented | Mature Python testing framework with strong fixture support and clean integration with CI/CD |
-| **FastAPI TestClient / HTTP client** | API endpoint testing                          | Implemented | Allows API behavior to be tested without requiring a separately deployed gateway             |
-| **Selenium**                         | Browser/UI automation                         | Planned     | Provides realistic browser-based validation for the planned dashboard                        |
-| **HTTPX**                            | HTTP client dependency                        | Installed   | Used by the current FastAPI/Starlette testing stack and related project dependencies         |
+| Technology             | Purpose                                                   | Status      | Why Chosen                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pytest**             | Unit, service, state-machine, API, and E2E test execution | Implemented | Mature Python testing framework with strong fixture support and clean test organization                                                        |
+| **Playwright**         | Browser/UI automation                                     | Implemented | Provides reliable browser automation, accessible-role selectors, strong debugging capabilities, and native support for modern web applications |
+| **HTTPX**              | HTTP client                                               | Implemented | Provides lightweight HTTP communication for E2E fixtures and API interaction                                                                   |
+| **FastAPI TestClient** | Application-level API testing                             | Implemented | Allows API behavior to be tested directly without requiring browser execution                                                                  |
+| **Selenium**           | Browser/UI automation                                     | Not Used    | Previously considered, but Playwright is the selected browser automation framework for the project                                             |
 
-## Current Automated Test Baseline
+Playwright is the project's current browser automation technology.
 
-The current project contains:
+The E2E suite uses Page Object Model classes to separate browser interaction logic from test scenarios.
 
-| Test Layer      |  Tests | Status                   |
-| --------------- | -----: | ------------------------ |
-| State Machine   |     14 | Passing                  |
-| Payment Service |     14 | Passing                  |
-| API             |     36 | Passing                  |
-| **Total**       | **64** | **64 Passed / 0 Failed** |
+---
 
-The test architecture intentionally separates:
+# Current Automated Test Baseline
 
-```text
-State Machine
-      |
-      v
-Payment Service
-      |
-      v
-API
+The verified regression command is:
+
+```powershell
+pytest -v
 ```
 
-This allows payment-domain rules to be tested independently from HTTP behavior.
+The current verified baseline is:
+
+```text
+96 tests
+96 passed
+0 failed
+```
+
+The current test architecture covers:
+
+```text
+                    Pytest
+                       |
+       +---------------+----------------+
+       |               |                |
+       v               v                v
+   Unit Tests       API Tests        E2E Tests
+       |               |                |
+       v               v                v
+ State Machine     FastAPI APIs      Playwright
+ Payment Service   Payment Domain    Dashboard
+ Audit Service     Idempotency       User Flows
+ Money Validation  Failure Cases     Transactions
+```
+
+The project also supports targeted E2E execution:
+
+```powershell
+pytest tests\e2e\test_transactions.py -v
+```
+
+and the complete E2E suite:
+
+```powershell
+pytest tests\e2e -v
+```
+
+The current E2E suite validates:
+
+* Dashboard loading
+* Card issuance through the browser
+* Transactions page loading
+* Transactions empty state
+* API-created authorized transactions appearing in the dashboard
+* Transaction lifecycle dialog access
 
 ---
 
 # Frontend / Dashboard
 
-The project currently contains a Web Dashboard implementation used for visualizing payment-system activity and transaction lifecycles.
+The project contains a React/TypeScript dashboard used for visualizing payment-system activity and transaction lifecycles.
 
-| Technology             | Purpose               | Status      | Why Chosen                                                                                                              |
-| ---------------------- | --------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **React / TypeScript** | Web Dashboard         | Implemented | Provides a structured component-based frontend suitable for a transaction-monitoring interface and future UI automation |
-| **CSS**                | Dashboard styling     | Implemented | Provides control over the dark payment-operations dashboard interface and lifecycle visualization                       |
-| **Selenium**           | Browser/UI automation | Planned     | Intended to validate user-visible dashboard behavior                                                                    |
+| Technology     | Purpose                                   | Status      | Why Chosen                                                                                   |
+| -------------- | ----------------------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
+| **React**      | Web Dashboard                             | Implemented | Provides a component-based architecture suitable for a transaction-monitoring interface      |
+| **TypeScript** | Frontend language                         | Implemented | Provides static typing for frontend state, API responses, and UI components                  |
+| **CSS**        | Dashboard styling                         | Implemented | Provides control over the payment-operations dashboard interface and lifecycle visualization |
+| **Vite**       | Frontend development server/build tooling | Implemented | Provides a fast development environment suitable for the React/TypeScript dashboard          |
+| **Playwright** | Browser/UI automation                     | Implemented | Validates user-visible dashboard behavior against a real browser                             |
 
 The dashboard currently focuses on:
 
@@ -151,22 +201,115 @@ The dashboard currently focuses on:
 * Transaction lifecycle
 * Card-related information
 * Payment-system operational views
+* Empty and loading states
+* Transaction lifecycle inspection
 
-The dashboard is currently treated as a frontend target for future automated UI validation rather than as the source of payment-domain business rules.
+The dashboard is treated as a presentation layer. Payment-domain business rules remain in the backend domain and service layers.
+
+---
+
+# Frontend Automation Architecture
+
+The E2E automation follows a Page Object Model structure.
+
+```text
+tests/e2e/
+    |
+    +-- conftest.py
+    |
+    +-- test_dashboard_smoke.py
+    |
+    +-- test_cards.py
+    |
+    +-- test_transactions.py
+    |
+    +-- pages/
+    |     |
+    |     +-- dashboard_page.py
+    |     +-- transactions_page.py
+    |
+    +-- components/
+          |
+          +-- reusable UI components
+```
+
+The Page Objects intentionally prefer:
+
+* Accessible roles
+* Accessible names
+* Semantic application behavior
+* Stable component-level selectors
+
+over highly specific CSS selectors wherever practical.
+
+For example, the Transactions Page Object locates the navigation control using its accessible role and a regular expression because the UI includes an icon in the accessible name.
+
+This reduces unnecessary coupling between the E2E suite and presentational markup.
+
+---
+
+# E2E Environment
+
+The current E2E environment expects the frontend and backend services to already be running.
+
+Backend:
+
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+Backend:
+
+```text
+http://localhost:8000
+```
+
+The Playwright fixtures create deterministic backend state through HTTP requests before executing browser assertions.
+
+For example, transaction lifecycle tests create:
+
+```text
+Fresh Card
+    |
+    v
+Authorization API
+    |
+    v
+AUTHORIZED Transaction
+    |
+    v
+Browser
+    |
+    v
+Transactions Page
+    |
+    v
+Lifecycle Dialog
+```
+
+This avoids requiring the browser test itself to perform every prerequisite operation through the UI.
 
 ---
 
 # AI Engineering Stack
 
-The AI layer is part of the planned PayGuard AI architecture and is not yet part of the current 64-test payment-domain implementation.
+The AI layer is part of the planned PayGuard AI architecture.
 
-| Technology        | Purpose                          | Status  | Why Chosen                                                                                           |
-| ----------------- | -------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| **LangChain**     | LLM orchestration                | Planned | Provides components for building retrieval and LLM-based workflows                                   |
-| **LangGraph**     | AI workflow orchestration        | Planned | Provides a structured approach for multi-step AI workflows such as failure analysis                  |
-| **ChromaDB**      | Vector storage                   | Planned | Lightweight local vector database suitable for storing and retrieving historical failure information |
-| **Ollama**        | Local LLM inference              | Planned | Enables local model execution without requiring a hosted LLM API                                     |
-| **OpenTelemetry** | Application and AI observability | Planned | Provides a foundation for tracing and measuring application and AI workflows                         |
+It is not currently required for the core payment-domain regression suite.
+
+| Technology        | Purpose                          | Status  | Why Chosen                                                                       |
+| ----------------- | -------------------------------- | ------- | -------------------------------------------------------------------------------- |
+| **LangChain**     | LLM orchestration                | Planned | Provides components for retrieval and LLM-based workflows                        |
+| **LangGraph**     | AI workflow orchestration        | Planned | Provides a structured approach for multi-step workflows such as failure analysis |
+| **ChromaDB**      | Vector storage                   | Planned | Lightweight local vector database suitable for historical failure retrieval      |
+| **Ollama**        | Local LLM inference              | Planned | Enables local model execution without requiring a hosted LLM API                 |
+| **OpenTelemetry** | Application and AI observability | Planned | Provides a foundation for tracing application and AI workflows                   |
 
 ---
 
@@ -174,7 +317,7 @@ The AI layer is part of the planned PayGuard AI architecture and is not yet part
 
 ## AI Root Cause Analysis
 
-The planned **RCA** pipeline will follow:
+The planned RCA pipeline will follow:
 
 ```text
 Test Failure
@@ -202,7 +345,9 @@ The intended purpose is to correlate the current failure with historical failure
 
 The AI should assist investigation rather than become an unverified source of truth.
 
-## AI Test Case Generation
+---
+
+# AI Test Case Generation
 
 The planned test-generation pipeline will use the FastAPI OpenAPI specification:
 
@@ -230,72 +375,122 @@ AI-generated scenarios will initially be treated as suggestions rather than auto
 
 ## Current Persistence
 
-| Technology            | Status      | Purpose                                                              |
-| --------------------- | ----------- | -------------------------------------------------------------------- |
-| **In-Memory Storage** | Implemented | Temporary persistence mechanism for the current Mock Payment Gateway |
+| Technology                      | Status      | Purpose                                                       |
+| ------------------------------- | ----------- | ------------------------------------------------------------- |
+| **In-Memory Storage**           | Implemented | Current persistence mechanism for the Mock Payment Gateway    |
+| **Repository Abstraction**      | Implemented | Isolates application services from the storage implementation |
+| **Audit Event Storage**         | Implemented | Stores audit records during the application lifetime          |
+| **Transaction History Storage** | Implemented | Stores lifecycle events during the application lifetime       |
 
-The current storage approach is intentionally simple and is sufficient for validating the payment lifecycle and service architecture.
+The current storage implementation provides deterministic application state but does not provide durable persistence.
 
-However, it does not provide:
+It does not currently provide:
 
-* Durable storage
+* Persistence across application restarts
 * Database transactions
 * Transaction isolation
 * Row-level locking
-* Persistence across application restarts
 * Database-level constraints
 * Distributed concurrency control
 * Durable transaction history
 
-These limitations are important because the next architectural stage is focused on reliability and persistence rather than immediately adding more application features.
+These limitations define the next major persistence stage.
 
 ---
 
 # Planned Persistence
 
-| Technology     | Status  | Purpose                       | Why Planned                                                                                                                                     |
-| -------------- | ------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SQLAlchemy** | Planned | Database abstraction / ORM    | Provides a structured persistence layer for PostgreSQL integration                                                                              |
-| **PostgreSQL** | Planned | Durable transactional storage | Provides transactional guarantees, persistence, constraints, and concurrency controls required for a more realistic payment-system architecture |
+| Technology     | Status  | Purpose                       | Why Planned                                                                           |
+| -------------- | ------- | ----------------------------- | ------------------------------------------------------------------------------------- |
+| **SQLAlchemy** | Planned | Database abstraction / ORM    | Provides a structured persistence layer for PostgreSQL integration                    |
+| **PostgreSQL** | Planned | Durable transactional storage | Provides persistence, transactional guarantees, constraints, and concurrency controls |
 
 The repository abstraction is intended to allow this migration without requiring payment business logic to depend directly on PostgreSQL.
 
-The planned persistence architecture is:
+Planned architecture:
 
 ```text
 Payment Service
-      |
-      v
+    |
+    v
 Transaction Repository
-      |
-      v
+    |
+    v
 SQLAlchemy
-      |
-      v
+    |
+    v
 PostgreSQL
 ```
 
-The migration should preserve the existing payment-domain interface wherever practical.
+The migration should preserve the existing payment-domain interfaces wherever practical.
 
 ---
 
 # Reliability Technology Requirements
 
-Persistence alone does not make a payment system reliable. The next stage must also address transaction consistency and duplicate operations.
+Several reliability controls are already implemented. Others remain architectural priorities.
 
-The planned reliability layer includes:
+| Capability                 | Status                | Purpose                                                                                    |
+| -------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| **Monetary Precision**     | Implemented           | Prevent floating-point inaccuracies in financial calculations                              |
+| **Idempotency**            | Implemented           | Prevent duplicate payment operations caused by repeated requests                           |
+| **Concurrency Control**    | Planned               | Prevent race conditions involving simultaneous transaction operations                      |
+| **Database Transactions**  | Planned               | Ensure related state changes are committed or rolled back consistently                     |
+| **Durable Audit History**  | Planned               | Preserve audit and transaction history across application restarts                         |
+| **Failure Recovery**       | Partially Implemented | Deterministic technical failure scenarios exist; broader recovery semantics remain planned |
+| **Consistency Validation** | Implemented           | Payment-domain tests validate lifecycle and monetary consistency                           |
 
-| Capability                 | Status  | Purpose                                                                |
-| -------------------------- | ------- | ---------------------------------------------------------------------- |
-| **Monetary Precision**     | Planned | Prevent floating-point inaccuracies in financial calculations          |
-| **Idempotency**            | Planned | Prevent duplicate payment operations caused by repeated requests       |
-| **Concurrency Control**    | Planned | Prevent race conditions involving simultaneous transaction operations  |
-| **Database Transactions**  | Planned | Ensure related state changes are committed or rolled back consistently |
-| **Durable Audit History**  | Planned | Preserve transaction lifecycle events across application restarts      |
-| **Failure Recovery**       | Planned | Define safe behavior for technical failures and retries                |
-| **Consistency Validation** | Planned | Ensure transaction amounts and states remain internally consistent     |
+The current implementation deliberately establishes monetary correctness and idempotency before introducing database-backed concurrency controls.
 
-These controls are more important to the architecture's next stage than adding additional surface-level features.
+---
+
+# Idempotency Architecture
+
+Idempotency is currently implemented at the application storage/API level.
+
+The current authorization behavior distinguishes between:
+
+```text
+Same Idempotency-Key
+        |
+        +-- Same Request
+        |      |
+        |      v
+        |   Replay Original Response
+        |
+        +-- Different Request
+               |
+               v
+             HTTP 409
+```
+
+The current test suite verifies:
+
+* Replaying the same request
+* Preventing duplicate balance deductions
+* Rejecting a different request using the same key
+* Allowing different idempotency keys to represent separate operations
+* Preserving non-idempotent behavior when no key is supplied
+
+The current implementation is application-memory based. Durable idempotency storage will become important when PostgreSQL is introduced.
+
+---
+
+# Monetary Precision
+
+Financial calculations use decimal-safe arithmetic rather than relying on binary floating-point behavior.
+
+The test suite validates:
+
+* Exact decimal arithmetic
+* Valid two-decimal monetary values
+* Rejection of excessive decimal precision
+* Rejection of zero authorization amounts
+* Rejection of negative authorization amounts
+* Decimal-safe capture calculations
+* Decimal-safe refund calculations
+
+This is a foundational payment-domain concern and is therefore implemented before database migration.
 
 ---
 
@@ -326,10 +521,10 @@ Containerization will be introduced as the corresponding services become impleme
 
 # CI/CD
 
-| Technology         | Purpose                                               | Status      | Why Chosen                                                                                            |
-| ------------------ | ----------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------- |
-| **GitHub Actions** | Continuous integration and future automated execution | Planned     | Integrates directly with GitHub and can execute the automated regression suite as the project evolves |
-| **Git**            | Version control                                       | Implemented | Provides source-code versioning and the development workflow                                          |
+| Technology         | Purpose                                        | Status      | Why Chosen                                                                                  |
+| ------------------ | ---------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| **GitHub Actions** | Continuous integration and automated execution | Planned     | Integrates directly with GitHub and can execute the regression suite as the project evolves |
+| **Git**            | Version control                                | Implemented | Provides source-code versioning and development workflow                                    |
 
 The intended CI/CD pipeline will eventually execute the appropriate testing layers and may trigger AI-assisted analysis when failures occur.
 
@@ -339,7 +534,7 @@ Planned workflow:
 Commit / Pull Request
     |
     v
-Domain / Unit Tests
+Unit / Domain Tests
     |
     v
 Service Tests
@@ -351,10 +546,10 @@ API Tests
 Integration Tests
     |
     v
-UI Tests
+E2E / Playwright Tests
     |
     v
-AI Validation
+AI-Assisted Analysis
 ```
 
 The pipeline should be introduced incrementally. Tests and infrastructure should not be added to CI before they are stable enough to provide meaningful feedback.
@@ -370,6 +565,7 @@ Observability is a planned part of the production-oriented architecture.
 | **OpenTelemetry**      | Distributed tracing and telemetry  | Planned     |
 | **Structured Logging** | Payment and test event diagnostics | Planned     |
 | **Transaction Events** | Payment lifecycle traceability     | Implemented |
+| **Audit Events**       | Operational/security traceability  | Implemented |
 
 Observability will become particularly important when the project introduces:
 
@@ -381,21 +577,23 @@ Observability will become particularly important when the project introduces:
 * Multiple application services
 * Persistent transaction history
 
-The transaction history already provides a domain-level foundation for later observability work.
+The existing transaction history and audit-event model provide a domain-level foundation for later observability work.
 
 ---
 
 # Development Environment
 
-| Tool                                       | Purpose                               | Status      |
-| ------------------------------------------ | ------------------------------------- | ----------- |
-| **IntelliJ IDEA / PyCharm**                | Primary development environment       | Implemented |
-| **Git**                                    | Version control                       | Implemented |
-| **Python venv**                            | Dependency isolation                  | Implemented |
-| **PowerShell**                             | Local development commands on Windows | Implemented |
-| **React / TypeScript Development Tooling** | Dashboard development                 | Implemented |
-| **Docker Desktop**                         | Container development                 | Planned     |
-| **Ollama**                                 | Local LLM runtime                     | Planned     |
+| Tool                           | Purpose                               | Status      |
+| ------------------------------ | ------------------------------------- | ----------- |
+| **PyCharm / IntelliJ IDEA**    | Primary development environment       | Implemented |
+| **Git**                        | Version control                       | Implemented |
+| **Python venv**                | Dependency isolation                  | Implemented |
+| **PowerShell**                 | Local development commands on Windows | Implemented |
+| **React / TypeScript Tooling** | Dashboard development                 | Implemented |
+| **Vite**                       | Frontend development server           | Implemented |
+| **Playwright**                 | Browser automation                    | Implemented |
+| **Docker Desktop**             | Container development                 | Planned     |
+| **Ollama**                     | Local LLM runtime                     | Planned     |
 
 The backend development environment currently targets Python 3.11.
 
@@ -433,15 +631,11 @@ This separation becomes increasingly important as the project introduces Postgre
 
 # HTTP Client Compatibility
 
-The current environment contains:
+The project uses HTTPX for HTTP-based test fixtures and related application testing.
 
-```text
-httpx==0.28.1
-```
+The exact installed HTTPX version should be treated as an environment detail rather than a permanent architectural requirement.
 
-The existing FastAPI/Starlette testing environment has produced a TestClient compatibility/deprecation warning related to the HTTP client dependency.
-
-Dependency changes should be handled deliberately rather than downgrading the framework stack simply to eliminate a warning.
+Dependency changes should be handled deliberately rather than changing the framework stack simply to eliminate warnings.
 
 Any dependency change must be followed by the complete regression suite:
 
@@ -449,15 +643,15 @@ Any dependency change must be followed by the complete regression suite:
 pytest -v
 ```
 
-The functional baseline should remain:
+The current verified functional baseline is:
 
 ```text
-64 tests
-64 passed
+96 tests
+96 passed
 0 failed
 ```
 
-If the dependency versions change, the exact versions should be documented again based on the verified development environment rather than copied indefinitely from an older environment snapshot.
+If dependency versions change, the exact versions should be documented again based on the verified development environment rather than copied indefinitely from an older environment snapshot.
 
 ---
 
@@ -473,41 +667,43 @@ The system should first produce reliable payment behavior before an LLM is asked
 
 ```text
 Payment Domain
-      |
-      v
+    |
+    v
 Reliable Tests
-      |
-      v
+    |
+    v
 Failure Data
-      |
-      v
+    |
+    v
 AI Analysis
 ```
 
+---
+
 ## 2. Persistence before advanced automation
 
-The system should establish durable and consistent transaction behavior before building automation and AI features that depend on transaction history.
+The system should establish durable and consistent transaction behavior before building automation and AI features that depend heavily on historical transaction data.
 
 ```text
 Payment Domain
-      |
-      v
+    |
+    v
 Repository
-      |
-      v
+    |
+    v
 Persistent Storage
-      |
-      v
+    |
+    v
 Reliability Controls
-      |
-      v
+    |
+    v
 Automation
-      |
-      v
+    |
+    v
 AI
 ```
 
-This keeps the architecture grounded in reliable system behavior rather than building intelligence around ephemeral data.
+---
 
 ## 3. Separation of concerns
 
@@ -527,13 +723,45 @@ Storage
 
 This prevents framework-specific concerns from spreading throughout the payment domain.
 
+---
+
 ## 4. Testability
 
-Business rules should be testable independently from the HTTP layer.
+Business rules should be testable independently from the HTTP and browser layers.
 
-This is why the project contains separate state-machine, payment-service, and API test suites.
+This is why the project contains separate:
 
-## 5. Local-first AI
+* State-machine tests
+* Payment-service tests
+* API tests
+* Audit-service tests
+* Monetary validation tests
+* Browser-level E2E tests
+
+The Page Object Model further separates browser interaction logic from individual E2E scenarios.
+
+---
+
+## 5. Playwright-first browser automation
+
+Playwright is the selected browser automation framework for the project.
+
+The choice is based on:
+
+* Reliable browser automation
+* Modern web-application support
+* Accessible-role selectors
+* Strong auto-waiting behavior
+* Browser context isolation
+* Built-in Chromium/Firefox/WebKit support
+* Useful debugging and tracing capabilities
+* Good integration with Pytest through the Playwright plugin
+
+Selenium is therefore not part of the current browser automation implementation.
+
+---
+
+## 6. Local-first AI
 
 The planned AI layer uses Ollama and local models to support:
 
@@ -542,11 +770,13 @@ The planned AI layer uses Ollama and local models to support:
 * Reduced external API dependency
 * Avoidance of mandatory hosted-LLM costs
 
-## 6. Production-oriented payment design
+---
+
+## 7. Production-oriented payment design
 
 Although PayGuard AI is a mock payment gateway rather than a production payment processor, architectural decisions are made with payment-system concerns in mind.
 
-Future architecture will address:
+The architecture addresses or plans for:
 
 * Monetary precision
 * Idempotency
@@ -559,7 +789,9 @@ Future architecture will address:
 * Security
 * Failure recovery
 
-## 7. Incremental complexity
+---
+
+## 8. Incremental complexity
 
 Technologies are introduced when they solve an actual architectural problem.
 
@@ -581,13 +813,22 @@ Payment Service
 Repository Abstraction
     |
     v
+Monetary Precision
+    |
+    v
+Idempotency
+    |
+    v
+Dashboard
+    |
+    v
+Playwright E2E Automation
+    |
+    v
 Persistent Storage
     |
     v
-Reliability Controls
-    |
-    v
-UI + Automation
+Concurrency Controls
     |
     v
 AI Augmentation
@@ -602,26 +843,30 @@ This sequence is intentional. Adding six infrastructure systems at once would pr
 
 # Current vs Planned Stack
 
-| Area              | Current                           | Planned                               |
-| ----------------- | --------------------------------- | ------------------------------------- |
-| Language          | Python 3.11                       | —                                     |
-| Backend           | FastAPI                           | —                                     |
-| Validation        | Pydantic                          | —                                     |
-| Server            | Uvicorn                           | —                                     |
-| Storage           | In-memory                         | PostgreSQL                            |
-| Persistence Layer | Repository                        | SQLAlchemy + PostgreSQL               |
-| Domain            | State Machine + Domain Exceptions | Extended payment reliability controls |
-| API Testing       | Pytest                            | Expanded integration testing          |
-| Service Testing   | Pytest                            | Expanded reliability testing          |
-| State Testing     | Pytest                            | Expanded lifecycle testing            |
-| Dashboard         | React + TypeScript                | Expanded dashboard functionality      |
-| UI Automation     | —                                 | Selenium                              |
-| AI Orchestration  | —                                 | LangChain + LangGraph                 |
-| Vector Database   | —                                 | ChromaDB                              |
-| Local LLM         | —                                 | Ollama                                |
-| Observability     | —                                 | OpenTelemetry                         |
-| Containers        | —                                 | Docker + Docker Compose               |
-| CI/CD             | —                                 | GitHub Actions                        |
+| Area              | Current                                      | Planned                                |
+| ----------------- | -------------------------------------------- | -------------------------------------- |
+| Language          | Python 3.11                                  | —                                      |
+| Backend           | FastAPI                                      | —                                      |
+| Validation        | Pydantic                                     | —                                      |
+| Server            | Uvicorn                                      | —                                      |
+| Storage           | In-memory                                    | PostgreSQL                             |
+| Persistence Layer | Repository                                   | SQLAlchemy + PostgreSQL                |
+| Domain            | State Machine + Services + Domain Exceptions | Extended payment reliability controls  |
+| Monetary Handling | Decimal-safe implementation                  | —                                      |
+| Idempotency       | Implemented                                  | Durable database-backed implementation |
+| API Testing       | Pytest                                       | Expanded integration testing           |
+| Service Testing   | Pytest                                       | Expanded reliability testing           |
+| State Testing     | Pytest                                       | Expanded lifecycle testing             |
+| Audit Testing     | Pytest                                       | Durable audit testing                  |
+| Dashboard         | React + TypeScript + CSS                     | Expanded dashboard functionality       |
+| Frontend Tooling  | Vite                                         | —                                      |
+| UI Automation     | Playwright                                   | Expanded cross-browser E2E coverage    |
+| AI Orchestration  | —                                            | LangChain + LangGraph                  |
+| Vector Database   | —                                            | ChromaDB                               |
+| Local LLM         | —                                            | Ollama                                 |
+| Observability     | Transaction/Audit Events                     | OpenTelemetry + Structured Logging     |
+| Containers        | —                                            | Docker + Docker Compose                |
+| CI/CD             | —                                            | GitHub Actions                         |
 
 ---
 
@@ -629,7 +874,7 @@ This sequence is intentional. Adding six infrastructure systems at once would pr
 
 The intended implementation sequence is:
 
-### Phase 1 — Core Payment Domain
+## Phase 1 — Core Payment Domain
 
 **Implemented**
 
@@ -642,31 +887,49 @@ The intended implementation sequence is:
 * In-memory storage
 * Pytest
 * API testing
+* Audit events
+* Transaction history
 
-### Phase 2 — Payment Reliability
+---
 
-**Next priority**
+## Phase 2 — Payment Reliability
+
+**Partially Implemented / Current Priority**
 
 * Monetary precision
+* Idempotency
+* Consistency validation
 * PostgreSQL
 * SQLAlchemy
 * Database transactions
-* Idempotency
 * Concurrency control
 * Durable transaction history
+* Durable idempotency records
 * Persistence tests
 
-### Phase 3 — Automation Platform
+The first three reliability concerns are already represented in the current application and test suite. PostgreSQL-backed durability and concurrency controls remain the next major persistence work.
 
-**Planned**
+---
 
-* React / TypeScript dashboard refinement
-* Selenium
+## Phase 3 — Automation Platform
+
+**Implemented / Expanding**
+
+* React / TypeScript dashboard
+* Vite frontend tooling
+* Playwright
+* Page Object Model
+* API-backed E2E fixtures
+* Dashboard smoke tests
+* Card E2E scenarios
+* Transaction E2E scenarios
 * Expanded API testing
 * Integration testing
-* End-to-end transaction scenarios
+* End-to-end transaction lifecycle scenarios
 
-### Phase 4 — AI-Augmented Testing
+---
+
+## Phase 4 — AI-Augmented Testing
 
 **Planned**
 
@@ -677,8 +940,11 @@ The intended implementation sequence is:
 * Historical failure retrieval
 * AI-assisted RCA
 * AI-generated test scenarios
+* Human review of generated scenarios
 
-### Phase 5 — Operational Platform
+---
+
+## Phase 5 — Operational Platform
 
 **Planned**
 
@@ -689,22 +955,27 @@ The intended implementation sequence is:
 * CI/CD automation
 * Security hardening
 * Production-oriented observability
+* Durable operational telemetry
 
 ---
 
 # Summary Rationale
 
-PayGuard AI deliberately combines technologies that support both sides of the project's engineering objective.
+PayGuard AI deliberately combines technologies that support the project's payment-engineering, quality-engineering, and AI objectives.
 
 ## Payment and QA Engineering
 
 * **FastAPI** provides the Mock Payment Gateway.
 * **Pydantic** provides structured API validation.
 * **Pytest** provides the primary automated testing framework.
-* **React and TypeScript** provide the current transaction-monitoring dashboard.
-* **Selenium** is planned for realistic browser-level automation.
+* **React and TypeScript** provide the transaction-monitoring dashboard.
+* **Vite** provides the frontend development environment.
+* **Playwright** provides browser-level E2E automation.
+* **Page Objects** keep browser interaction logic maintainable.
 * **State machines, services, repositories, and domain exceptions** provide a maintainable payment-domain architecture.
-* **PostgreSQL and SQLAlchemy** are planned for durable, transactional persistence.
+* **Decimal-safe monetary handling** protects financial calculations.
+* **Idempotency** protects payment operations from duplicate requests.
+* **PostgreSQL and SQLAlchemy** are planned for durable transactional persistence.
 
 ## Applied AI
 
@@ -719,10 +990,19 @@ The overall technology strategy is therefore not simply a collection of popular 
 Reliable Payment Domain
     |
     v
+Monetary Correctness
+    |
+    v
+Idempotent Operations
+    |
+    v
 Automated Validation
     |
     v
-Persistent + Reliable Architecture
+Browser-Level E2E Automation
+    |
+    v
+Persistent + Concurrent Architecture
     |
     v
 Enterprise-Style Test Automation
@@ -737,6 +1017,16 @@ AI-Assisted Test Generation
 CI/CD + Observability
 ```
 
-The immediate priority is the **payment reliability foundation**, particularly persistent storage, monetary correctness, idempotency, concurrency safety, and durable transaction history.
+The immediate architectural priority is **durable payment reliability**, particularly:
 
-The dashboard and API foundation are already sufficient to support the next engineering stage. AI should be introduced after the system produces reliable, persistent, and sufficiently rich failure and transaction data. That gives the AI something useful to analyze instead of asking it to perform interpretive gymnastics over disappearing in-memory state.
+* PostgreSQL persistence
+* Database transactions
+* Concurrency safety
+* Durable idempotency
+* Durable audit history
+* Failure recovery
+
+The current backend, dashboard, API test suite, and Playwright E2E foundation are already sufficiently mature to support that next stage.
+
+
+

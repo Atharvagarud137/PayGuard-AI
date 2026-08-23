@@ -4,87 +4,139 @@
 
 This document defines the testing strategy for PayGuard AI.
 
-PayGuard AI is an AI-augmented payment-system testing platform built around a simulated payment gateway. The testing strategy focuses on validating payment-domain correctness, transaction lifecycle behavior, API contracts, failure handling, boundary conditions, and the ability to observe a transaction through its complete lifecycle.
+PayGuard AI is an AI-augmented payment-system testing platform built around a simulated payment gateway. The testing strategy focuses on validating payment-domain correctness, transaction lifecycle behavior, API contracts, failure handling, boundary conditions, idempotency, auditability, and the ability to observe transactions through their complete lifecycle.
 
-The current implementation provides a functional payment gateway and a Web Dashboard capable of displaying transaction lifecycle state. The next testing phases will extend this foundation with reliability testing, persistent storage validation, UI automation, observability, AI-assisted root cause analysis, and CI/CD validation.
+The current implementation provides:
+
+- A functional payment gateway
+- Payment-domain and state-machine validation
+- Payment service validation
+- API-level validation
+- Idempotency handling
+- Audit-event recording
+- A functional Web Dashboard
+- Automated Playwright browser tests for the dashboard
+- End-to-end transaction setup through the API and validation through the UI
 
 The testing strategy follows a layered approach:
 
 ```text
-Domain
-   ↓
-Service
-   ↓
+Domain / State Machine
+        ↓
+Payment Service
+        ↓
 API
-   ↓
+        ↓
 Integration
-   ↓
+        ↓
 UI / End-to-End
-   ↓
+        ↓
 Reliability
-   ↓
+        ↓
+Observability
+        ↓
 AI Validation
-   ↓
+        ↓
 CI/CD
 ````
 
-The objective is not simply to maximize test count. The objective is to establish confidence that payment transactions behave correctly from authorization through capture, settlement, and refund while failures and invalid operations remain deterministic and diagnosable.
+The objective is not simply to maximize test count. The objective is to establish confidence that payment transactions behave correctly from authorization through capture, settlement, and refund while failures, invalid operations, duplicate requests, and lifecycle inconsistencies remain deterministic and diagnosable.
 
 ---
 
-## Current Test Architecture
+# Current Test Architecture
 
-The current automated backend test suite is organized into three primary layers:
+The current automated test suite is organized into four implemented layers:
 
 ```text
-    ┌──────────────────────┐
-    │      API Tests       │
-    │       36 tests       │
-    └──────────┬───────────┘
-               │
-    ┌──────────▼───────────┐
-    │  Payment Service     │
-    │       14 tests       │
-    └──────────┬───────────┘
-               │
-    ┌──────────▼───────────┐
-    │   State Machine      │
-    │       14 tests       │
-    └──────────────────────┘
+┌──────────────────────────┐
+│       API Tests          │
+│        36 tests          │
+└────────────┬─────────────┘
+             │
+┌────────────▼─────────────┐
+│    Payment Service        │
+│        14 tests           │
+└────────────┬─────────────┘
+             │
+┌────────────▼─────────────┐
+│     State Machine         │
+│        14 tests           │
+└──────────────────────────┘
+
+┌──────────────────────────┐
+│       E2E Tests           │
+│         4 tests           │
+│      Playwright           │
+└──────────────────────────┘
 ```
 
-### Current Test Baseline
+## Current Test Baseline
 
-| Test Layer      | Tool       |  Tests | Status                   |
-| --------------- | ---------- | -----: | ------------------------ |
-| State Machine   | Pytest     |     14 | Passing                  |
-| Payment Service | Pytest     |     14 | Passing                  |
-| API             | Pytest     |     36 | Passing                  |
-| **Total**       | **Pytest** | **64** | **64 Passed / 0 Failed** |
+| Test Layer      | Tool                |               Tests | Status      |
+| --------------- | ------------------- | ------------------: | ----------- |
+| State Machine   | Pytest              |                  14 | Passing     |
+| Payment Service | Pytest              |                  14 | Passing     |
+| API             | Pytest              |                  36 | Passing     |
+| E2E / UI        | Pytest + Playwright |                   4 | Passing     |
+| **Total**       | **Pytest**          | **68 direct tests** | **Passing** |
 
-The current regression baseline contains 64 automated tests with zero failures.
+The complete current regression run reports:
 
-The Web Dashboard is currently implemented as a functional application, but automated browser testing has not yet been introduced.
+```text
+96 collected
+96 passed
+0 failed
+```
+
+The difference between the 68 directly counted tests above and the 96-test regression total is due to the broader test suite containing additional unit/API coverage beyond the principal layers summarized in the table.
+
+The latest verified regression baseline is:
+
+```text
+96 tests
+96 passed
+0 failed
+```
+
+The E2E suite currently contains:
+
+```text
+4 tests
+4 passed
+```
+
+The current E2E suite validates:
+
+* Dashboard navigation
+* Transactions page loading
+* Transactions empty state
+* Authorized transaction visibility
+* Merchant visibility
+* Transaction status visibility
+* Transaction lifecycle dialog
+* Lifecycle dialog closing
 
 ---
 
-## Test Pyramid
+# Test Pyramid
 
-The long-term test strategy follows a layered test pyramid.
+The project follows a layered test pyramid in which lower-level tests provide fast deterministic feedback and higher-level tests validate cross-system behavior.
 
-| Layer               | Tool                   | Current Status | Purpose                                                                 |
-| ------------------- | ---------------------- | -------------- | ----------------------------------------------------------------------- |
-| Domain / Unit Tests | Pytest                 | Implemented    | Validate state transitions and payment-domain rules                     |
-| Service Tests       | Pytest                 | Implemented    | Validate payment business logic independently of HTTP                   |
-| API Tests           | Pytest                 | Implemented    | Validate externally observable gateway behavior                         |
-| Integration Tests   | Pytest                 | Planned        | Validate interaction between API, services, repository, and persistence |
-| UI Tests            | Selenium               | Planned        | Validate dashboard behavior and transaction lifecycle visibility        |
-| End-to-End Tests    | Selenium + API         | Planned        | Validate complete payment scenarios across system boundaries            |
-| Reliability Tests   | Pytest                 | Planned        | Validate idempotency, concurrency, retries, and failure recovery        |
-| Persistence Tests   | Pytest + PostgreSQL    | Planned        | Validate transactional consistency and durable state                    |
-| AI Validation Tests | Pytest / Custom Checks | Planned        | Validate RCA output and generated test scenarios                        |
+| Layer                  | Tool                   | Current Status                    | Purpose                                                          |
+| ---------------------- | ---------------------- | --------------------------------- | ---------------------------------------------------------------- |
+| Domain / State Machine | Pytest                 | Implemented                       | Validate lifecycle rules and domain transitions                  |
+| Service Tests          | Pytest                 | Implemented                       | Validate payment business logic independently of HTTP            |
+| API Tests              | Pytest + HTTP client   | Implemented                       | Validate externally observable gateway behavior                  |
+| E2E / UI Tests         | Playwright + Pytest    | Implemented                       | Validate dashboard behavior through a real browser               |
+| Integration Tests      | Pytest                 | Planned                           | Validate API, services, repositories, and persistence together   |
+| Reliability Tests      | Pytest                 | Partially implemented / Expanding | Validate idempotency, failure handling, retries, and concurrency |
+| Persistence Tests      | Pytest + PostgreSQL    | Planned                           | Validate durable state and transactional consistency             |
+| Observability Tests    | Pytest / OpenTelemetry | Planned                           | Validate logs, tracing, correlation, and diagnostic context      |
+| AI Validation Tests    | Pytest / Custom Checks | Planned                           | Validate RCA and generated test scenarios                        |
+| CI/CD Validation       | GitHub Actions         | Planned                           | Execute automated regression in CI                               |
 
-The project deliberately establishes domain and API correctness before introducing more expensive UI, integration, and AI-driven testing.
+The project deliberately establishes domain and API correctness before introducing more expensive integration, persistence, reliability, and AI-driven testing.
 
 ---
 
@@ -125,7 +177,7 @@ The lifecycle is enforced by the transaction state machine.
 
 The Web Dashboard provides a visual representation of this lifecycle so that a tester can inspect the progression of an individual transaction.
 
-The dashboard lifecycle view displays:
+The lifecycle model includes:
 
 * Authorization
 * Capture
@@ -137,7 +189,7 @@ The dashboard lifecycle view displays:
 * Amounts associated with each stage
 * Transaction history
 
-The automated test strategy will eventually validate both the underlying lifecycle behavior and its UI representation.
+Automated tests validate lifecycle behavior at the state-machine, service, API, and UI levels where appropriate.
 
 ---
 
@@ -163,7 +215,7 @@ PARTIALLY_REFUNDED
     └──► REFUNDED
 ```
 
-These transitions are validated by the state-machine tests.
+These transitions are validated independently by the state-machine tests.
 
 ---
 
@@ -196,41 +248,118 @@ The objective is to ensure that lifecycle rules are enforced centrally rather th
 
 ---
 
-# Payment Flow Test Coverage
+# Card Issuance Testing
 
-## Card Issuance
+Card issuance is validated through API-level tests.
 
 | Category   | Coverage                                  |
 | ---------- | ----------------------------------------- |
 | Positive   | Valid card successfully created           |
 | Negative   | Missing required fields rejected          |
 | Negative   | Invalid card network rejected             |
-| Boundary   | Zero initial balance behavior             |
+| Boundary   | Zero initial balance rejected             |
 | Boundary   | Negative initial balance rejected         |
 | Integrity  | Multiple cards receive unique identifiers |
-| Validation | Expiry date validation                    |
 | Validation | Cardholder information validation         |
+| Validation | Expiry date validation                    |
+| Security   | Card number is masked in API response     |
+
+A successful card issuance must produce:
+
+* A unique `card_id`
+* The requested cardholder
+* The requested network
+* The requested initial balance
+* An `ACTIVE` status
+* A masked card number
+
+The tests must never depend on real payment-card information.
 
 ---
 
-## Authorization
+# Authorization Testing
 
-| Category   | Coverage                                            |
-| ---------- | --------------------------------------------------- |
-| Positive   | Transaction authorized with sufficient balance      |
-| Negative   | Insufficient funds produce a declined transaction   |
-| Negative   | Card not found                                      |
-| Negative   | Inactive card                                       |
-| Boundary   | Authorization for exact available balance           |
-| Validation | Missing merchant ID                                 |
-| Boundary   | Zero transaction amount                             |
-| Validation | Invalid transaction amount                          |
-| Integrity  | Authorized amount is recorded correctly             |
-| Lifecycle  | Authorization creates the initial transaction state |
+Authorization is validated through API tests.
+
+| Category      | Coverage                                                           |
+| ------------- | ------------------------------------------------------------------ |
+| Positive      | Transaction authorized with sufficient balance                     |
+| Negative      | Insufficient funds produce a declined transaction                  |
+| Negative      | Card not found                                                     |
+| Negative      | Inactive card                                                      |
+| Boundary      | Authorization for exact available balance                          |
+| Validation    | Missing merchant ID                                                |
+| Boundary      | Zero transaction amount                                            |
+| Validation    | Invalid transaction amount                                         |
+| Integrity     | Authorized amount is recorded correctly                            |
+| Lifecycle     | Authorization creates the initial transaction state                |
+| Idempotency   | Same key replays the original result                               |
+| Idempotency   | Same key does not double-charge                                    |
+| Idempotency   | Same key with different request is rejected                        |
+| Integrity     | Different keys create separate operations                          |
+| Compatibility | Requests without an idempotency key retain non-idempotent behavior |
+
+Expected behaviors include:
+
+```text
+Sufficient balance
+        ↓
+AUTHORIZED
+
+Insufficient balance
+        ↓
+DECLINED
+```
+
+The authorization tests also verify the idempotency contract.
 
 ---
 
-## Capture
+# Idempotency Testing
+
+Idempotency is currently implemented for authorization operations.
+
+The expected behavior is:
+
+```text
+First Request
+     │
+     ▼
+Operation Executed
+     │
+     ▼
+Result Stored
+     │
+     ▼
+Second Identical Request
+     │
+     ▼
+Original Result Replayed
+     │
+     ▼
+No Duplicate Financial Operation
+```
+
+The current API tests verify:
+
+* Repeating the same authorization request with the same idempotency key returns the same response.
+* Repeating the same request does not deduct the card balance twice.
+* Reusing an idempotency key for a different request returns HTTP `409`.
+* Different idempotency keys create separate transactions.
+* Requests without an idempotency key preserve existing non-idempotent behavior.
+
+Future reliability testing should extend idempotency validation to:
+
+* Capture
+* Settlement
+* Refund
+* Concurrent duplicate requests
+* Retry behavior
+* Failure followed by retry
+
+---
+
+# Capture Testing
 
 | Category    | Coverage                                     |
 | ----------- | -------------------------------------------- |
@@ -244,10 +373,11 @@ The objective is to ensure that lifecycle rules are enforced centrally rather th
 | Reliability | Declined transaction cannot be captured      |
 | Lifecycle   | Capture updates transaction history          |
 | Integrity   | Captured amount is preserved correctly       |
+| Idempotency | Planned extension                            |
 
 ---
 
-## Settlement
+# Settlement Testing
 
 | Category    | Coverage                                  |
 | ----------- | ----------------------------------------- |
@@ -259,10 +389,11 @@ The objective is to ensure that lifecycle rules are enforced centrally rather th
 | Reliability | Simulated network error                   |
 | Lifecycle   | Settlement updates transaction history    |
 | Integrity   | Settled amount is preserved correctly     |
+| Idempotency | Planned extension                         |
 
 ---
 
-## Refund
+# Refund Testing
 
 | Category  | Coverage                                      |
 | --------- | --------------------------------------------- |
@@ -303,7 +434,7 @@ This isolation ensures that lifecycle correctness does not depend on FastAPI, HT
 
 The `PaymentService` is tested independently from the API layer.
 
-The service-level test suite currently covers:
+The service-level suite covers:
 
 ## Capture
 
@@ -332,31 +463,31 @@ The service-level test suite currently covers:
 * Invalid transaction state
 * Already fully refunded transaction
 
-This layer verifies business rules without requiring the HTTP application to be running.
+This layer verifies business rules without requiring the HTTP application to be exercised through browser interactions.
 
 ---
 
 # API Testing
 
-API tests validate externally observable behavior of the Mock Payment Gateway.
+API tests validate externally observable behavior of the simulated payment gateway.
 
-The current API suite contains 36 tests covering:
+The API suite covers:
 
 * Card issuance
 * Authorization
 * Capture
 * Settlement
 * Refunds
-* Validation failures
+* Request validation
 * Missing resources
 * Invalid lifecycle states
 * Boundary values
 * Partial operations
+* Idempotency
+* Audit-event generation
 * Simulated technical failures
 
-The API tests also verify appropriate HTTP behavior for domain failures.
-
-Expected categories include:
+Expected HTTP categories include:
 
 ```text
 404  Resource not found
@@ -364,6 +495,7 @@ Expected categories include:
 400  Invalid amount or business constraint
 
 409  Invalid transaction lifecycle state
+     or idempotency conflict
 
 422  Request validation failure
 
@@ -372,15 +504,105 @@ Expected categories include:
 504  Simulated timeout
 ```
 
-The API layer is responsible for translating domain exceptions into HTTP responses. Payment-domain tests do not depend on these HTTP semantics.
+The API layer is responsible for translating domain exceptions into HTTP responses.
+
+Payment-domain tests do not depend on HTTP semantics.
+
+---
+
+# Audit Testing
+
+Audit behavior is part of the implemented backend test strategy.
+
+The audit tests verify that payment operations produce appropriate audit events.
+
+Current coverage includes:
+
+* Authorization creates an audit event.
+* Declined authorization creates an audit event.
+* Capture creates an audit event.
+* Audit events can be persisted and retrieved.
+* Audit events can be queried by transaction.
+* Audit events can be queried by correlation identifier.
+* Failed operations can be represented.
+* Audit events do not require sensitive payloads.
+* Raw card numbers must not appear in audit data.
+
+Audit testing is particularly important for a payment-system simulation because lifecycle correctness alone does not provide sufficient operational traceability.
+
+---
+
+# Domain Exception Testing
+
+Payment-domain failures are represented using typed exceptions rather than HTTP-specific exceptions.
+
+The current exception hierarchy includes:
+
+```text
+PaymentError
+│
+├── TransactionNotFoundError
+├── InvalidTransactionStateError
+├── CaptureAmountExceededError
+└── RefundAmountExceededError
+```
+
+The service layer raises domain-level exceptions.
+
+The API layer translates those exceptions into HTTP responses.
+
+This separation is tested through both service-level and API-level tests.
 
 ---
 
 # End-to-End Payment Lifecycle Testing
 
-The long-term goal of PayGuard AI is to validate the complete payment lifecycle as a single executable scenario.
+The E2E strategy validates behavior across system boundaries.
 
-A complete end-to-end scenario should eventually cover:
+The current E2E architecture uses:
+
+* Pytest
+* Playwright
+* HTTP client setup for deterministic backend test data
+* Page Object Model
+* Local Vite frontend
+* Local FastAPI backend
+
+The current E2E test flow is:
+
+```text
+API
+ │
+ ├── Create Test Card
+ │
+ └── Create Authorized Transaction
+          │
+          ▼
+      Playwright
+          │
+          ▼
+    Open Dashboard
+          │
+          ▼
+    Open Transactions
+          │
+          ▼
+   Verify Transaction
+          │
+          ▼
+ Open Lifecycle Dialog
+```
+
+The E2E fixtures intentionally create backend state through the API instead of attempting to manufacture complex payment state exclusively through UI interactions.
+
+This provides:
+
+* Deterministic setup
+* Faster test execution
+* Lower UI coupling
+* Better separation between API and UI responsibilities
+
+A future full lifecycle E2E scenario should eventually cover:
 
 ```text
 Card Issuance
@@ -398,35 +620,7 @@ Settlement
 Refund
 ```
 
-An end-to-end test should verify not only that each individual operation succeeds, but also that state and financial values remain consistent across the entire sequence.
-
-For example:
-
-```text
-Initial Card Balance
-        │
-        ▼
-Authorization
-        │
-        ├── Transaction = AUTHORIZED
-        │
-        ▼
-Capture
-        │
-        ├── Transaction = CAPTURED
-        │
-        ▼
-Settlement
-        │
-        ├── Transaction = SETTLED
-        │
-        ▼
-Refund
-        │
-        └── Transaction = REFUNDED
-```
-
-The test should validate:
+Such a test should verify:
 
 * Correct transaction state after every operation
 * Correct authorized amount
@@ -439,39 +633,250 @@ The test should validate:
 * No invalid intermediate state
 * No duplicate financial operation
 
-These tests are distinct from individual API tests because they validate the complete workflow rather than isolated endpoints.
-
 ---
 
 # Dashboard Testing Strategy
 
-The Web Dashboard currently provides a visual interface for:
+The Web Dashboard provides a visual interface for:
 
 * Monitoring cards
 * Viewing transactions
 * Inspecting transaction status
-* Opening a transaction lifecycle view
-* Viewing lifecycle stages
+* Viewing merchant information
 * Viewing transaction amounts
-* Viewing transaction event timestamps
+* Opening transaction lifecycle details
+* Viewing lifecycle stages
+* Viewing lifecycle event timestamps
 * Refreshing transaction data
 
-The dashboard is intended to become the primary UI target for automated browser testing.
+The dashboard is now an automated Playwright test target.
 
-## Manual Dashboard Validation
+---
 
-Before Selenium automation is introduced, the following behaviors should be manually validated:
+# Current Playwright E2E Coverage
 
-### Transactions
+The current E2E suite contains four tests.
 
-* Transaction list loads correctly
-* Transaction status matches backend state
-* Merchant information is displayed correctly
-* Transaction amount is displayed correctly
-* Transaction timestamps are displayed correctly
-* Refresh operation updates the transaction list
+## Dashboard Smoke Test
 
-### Lifecycle View
+Validates that the dashboard loads successfully.
+
+## Transactions Page Load
+
+Validates:
+
+* Transactions navigation is available.
+* Transactions page opens.
+* Transactions heading is displayed.
+* Transactions description is displayed.
+* Transactions list panel is displayed.
+
+## Transactions Empty State
+
+Validates:
+
+* Transactions page loads.
+* Empty transaction state is displayed when no transactions exist.
+
+## Authorized Transaction Visibility
+
+The test creates a card and transaction through the backend API and then validates the transaction through the browser.
+
+It verifies:
+
+* Transaction appears in the transaction table.
+* Merchant identifier is displayed.
+* `AUTHORIZED` status is displayed.
+
+## Transaction Lifecycle Dialog
+
+The test creates an authorized transaction through the API and then validates that:
+
+* The transaction appears in the UI.
+* Lifecycle action is available.
+* Lifecycle dialog opens.
+* Lifecycle dialog is visible.
+* Lifecycle dialog can be closed.
+
+---
+
+# Page Object Model
+
+The E2E suite uses a Page Object Model.
+
+The Transactions Page Object encapsulates:
+
+* Navigation
+* Page heading
+* Page description
+* Transaction list
+* Transaction table
+* Empty state
+* Refresh control
+* Transaction lookup
+* Transaction status assertions
+* Transaction amount assertions
+* Lifecycle dialog
+* Lifecycle dialog controls
+
+The Page Object intentionally prefers:
+
+* Accessible roles
+* Accessible names
+* Application semantics
+* Stable CSS classes where necessary
+
+The Page Object avoids unnecessary dependence on deeply nested DOM structure.
+
+Transaction UUIDs are shortened by the frontend, so the Page Object converts the backend transaction identifier into the UI representation before locating the transaction row.
+
+---
+
+# E2E Test Data Strategy
+
+E2E tests use dedicated API fixtures.
+
+The current E2E fixtures provide:
+
+```text
+frontend_url
+backend_url
+dashboard_page
+issued_e2e_card
+authorized_transaction
+```
+
+The `issued_e2e_card` fixture creates a fresh active VISA test card.
+
+The `authorized_transaction` fixture creates an authorized transaction against that card.
+
+The test data is:
+
+* Synthetic
+* Deterministic
+* Non-production
+* Disposable
+* Created through the local API
+
+No real payment credentials are used.
+
+---
+
+# E2E Environment
+
+The E2E suite currently expects the local frontend and backend to already be running.
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+Backend:
+
+```text
+http://localhost:8000
+```
+
+The backend can be started with:
+
+```powershell
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+The frontend should be started separately using the project's configured Vite development command.
+
+Pytest does not currently start the frontend automatically.
+
+This deliberate separation keeps the E2E fixture responsible for test setup rather than process management.
+
+---
+
+# E2E Regression Commands
+
+Run only the Transactions E2E tests:
+
+```powershell
+pytest tests\e2e\test_transactions.py -v
+```
+
+Run the complete E2E suite:
+
+```powershell
+pytest tests\e2e -v
+```
+
+Expected current E2E result:
+
+```text
+4 passed
+```
+
+Run the complete project regression suite:
+
+```powershell
+pytest -v
+```
+
+Expected current result:
+
+```text
+96 passed
+0 failed
+```
+
+---
+
+# UI Test Principles
+
+UI tests should validate user-visible behavior rather than reproduce the entire API suite.
+
+For example, API tests should verify:
+
+```text
+POST /api/v1/transactions/authorize
+→
+Correct HTTP response
+→
+Correct transaction state
+```
+
+A UI test should instead verify:
+
+```text
+Transaction created
+→
+Open Transactions
+→
+Transaction visible
+→
+Correct merchant
+→
+Correct status
+→
+Lifecycle can be opened
+```
+
+This separation prevents the E2E suite from becoming slow, brittle, and redundant.
+
+---
+
+# Manual Dashboard Validation
+
+Manual validation remains useful for behaviors that have not yet been automated.
+
+The following should be manually validated when relevant:
+
+## Transactions
+
+* Transaction list loads correctly.
+* Transaction status matches backend state.
+* Merchant information is displayed correctly.
+* Transaction amount is displayed correctly.
+* Transaction timestamps are displayed correctly.
+* Refresh operation updates transaction data.
+
+## Lifecycle View
 
 For a fully completed transaction:
 
@@ -501,77 +906,6 @@ PARTIALLY_REFUNDED  ●
 The dashboard must not incorrectly display a partially refunded transaction as fully refunded.
 
 For declined transactions, authorization should be represented as failed and downstream lifecycle stages should not appear as completed.
-
----
-
-# Future UI Automation
-
-Selenium automation will eventually validate the dashboard through real browser interactions.
-
-Planned UI scenarios include:
-
-### Dashboard Availability
-
-* Application loads successfully
-* Navigation elements are available
-* Backend connectivity state is displayed correctly
-
-### Transaction List
-
-* Transactions are displayed
-* Transaction IDs are visible
-* Merchant IDs are visible
-* Amounts are displayed correctly
-* Status is displayed correctly
-* Refresh functionality works
-
-### Transaction Lifecycle
-
-* Lifecycle can be opened from a transaction
-* Authorization stage is displayed
-* Capture stage is displayed
-* Settlement stage is displayed
-* Refund stage is displayed
-* Completed stages are visually distinguished
-* Current stages are visually distinguished
-* Upcoming stages are visually distinguished
-* Declined states are displayed correctly
-* Lifecycle event timestamps are displayed
-* Lifecycle amounts are displayed
-
-### Negative UI Scenarios
-
-* Backend unavailable
-* Empty transaction list
-* Transaction lookup failure
-* Invalid transaction response
-* API timeout
-* API error response
-
-UI tests should validate user-visible behavior rather than duplicate the entire API test suite.
-
----
-
-# Domain Exception Testing
-
-Payment-domain failures are represented using typed exceptions rather than HTTP-specific exceptions.
-
-The current exception hierarchy includes:
-
-```text
-PaymentError
-│
-├── TransactionNotFoundError
-├── InvalidTransactionStateError
-├── CaptureAmountExceededError
-└── RefundAmountExceededError
-```
-
-The service layer raises domain-level exceptions.
-
-The API layer translates those exceptions into HTTP responses.
-
-This separation is tested indirectly through both service-level and API-level tests.
 
 ---
 
@@ -606,7 +940,7 @@ X-Simulate-Failure: INVALID_RESPONSE
       HTTP 500
 ```
 
-These failure modes provide deterministic inputs for:
+These deterministic failure modes provide inputs for:
 
 * API testing
 * Reliability testing
@@ -625,37 +959,54 @@ The full test suite should be executed after changes affecting:
 * Repository behavior
 * API endpoints
 * Request/response models
+* Idempotency behavior
+* Audit behavior
 * Transaction lifecycle behavior
+* Dashboard transaction behavior
+* E2E fixtures
+* Page Objects
 
-## Run the complete suite
+## Complete Suite
 
 ```powershell
 pytest -v
 ```
 
-## Run API tests only
+## API Tests
 
 ```powershell
-pytest tests/api -v
+pytest tests\api -v
 ```
 
-## Run service-layer tests
+## Service Tests
 
 ```powershell
-pytest tests/unit/test_payment_service.py -v
+pytest tests\unit\test_payment_service.py -v
 ```
 
-## Run state-machine tests
+## State Machine Tests
 
 ```powershell
-pytest tests/unit/test_state_machine.py -v
+pytest tests\unit\test_state_machine.py -v
 ```
 
-Current regression baseline:
+## E2E Tests
+
+```powershell
+pytest tests\e2e -v
+```
+
+## Transactions E2E Tests
+
+```powershell
+pytest tests\e2e\test_transactions.py -v
+```
+
+Current verified regression baseline:
 
 ```text
-64 tests
-64 passed
+96 tests collected
+96 passed
 0 failed
 ```
 
@@ -667,12 +1018,15 @@ The baseline should remain green as new functionality is introduced.
 
 ## Current Development Environment
 
-The current automated backend tests run locally using:
+The current automated backend and E2E tests run locally using:
 
 * Python 3.11
 * FastAPI
 * Pytest
+* Playwright
+* HTTP client support
 * In-memory application storage
+* Local Vite frontend
 
 The current backend test suite does not require:
 
@@ -680,74 +1034,41 @@ The current backend test suite does not require:
 * Docker
 * ChromaDB
 * Ollama
-* Selenium
 
-The Web Dashboard can be run separately against the local payment gateway for manual functional validation.
-
----
-
-## Planned Test Environments
-
-| Environment               | Purpose                               | Status      |
-| ------------------------- | ------------------------------------- | ----------- |
-| Local Backend             | Rapid backend regression testing      | Implemented |
-| Local Dashboard + Backend | Manual end-to-end workflow validation | Implemented |
-| Local + PostgreSQL        | Persistence and consistency testing   | Planned     |
-| Docker Compose            | Integrated multi-service testing      | Planned     |
-| CI                        | Automated regression testing          | Planned     |
-| AI Validation Environment | RCA and test-generation evaluation    | Planned     |
+Playwright browser automation is required for the E2E suite.
 
 ---
 
-# Future Reliability Testing
+# Planned Test Environments
+
+| Environment               | Purpose                             | Status      |
+| ------------------------- | ----------------------------------- | ----------- |
+| Local Backend             | Rapid backend regression testing    | Implemented |
+| Local Dashboard + Backend | E2E browser validation              | Implemented |
+| Local + PostgreSQL        | Persistence and consistency testing | Planned     |
+| Docker Compose            | Integrated multi-service testing    | Planned     |
+| CI                        | Automated regression testing        | Planned     |
+| AI Validation Environment | RCA and test-generation evaluation  | Planned     |
+
+---
+
+# Reliability Testing
 
 Payment systems require more than functional correctness.
 
 The next reliability-focused testing phase will cover:
 
 * Idempotency
-* Concurrency
-* Duplicate requests
+* Concurrent requests
+* Duplicate operations
 * Transaction consistency
 * Retry behavior
 * Failure recovery
 * Persistence failures
 * Monetary precision
+* Audit consistency
 
----
-
-## Idempotency Testing
-
-The system should verify that repeated requests using the same idempotency key do not create duplicate payment operations.
-
-Future scenarios include:
-
-```text
-Duplicate Authorization
-Duplicate Capture
-Duplicate Settlement
-Duplicate Refund
-```
-
-Expected behavior:
-
-```text
-First Request
-    │
-    ▼
-Operation Executed
-    │
-    ▼
-Result Stored
-
-Second Identical Request
-    │
-    ▼
-Previously Stored Result
-    │
-    ▼
-No Duplicate Financial Operation
-```
+Idempotency is already implemented for authorization and should be expanded to additional payment operations.
 
 ---
 
@@ -771,8 +1092,9 @@ Similar scenarios should be tested for:
 * Concurrent settlement
 * Concurrent authorization attempts
 * Simultaneous updates to the same transaction
+* Duplicate API requests
 
-The database layer will become particularly important for these tests once PostgreSQL persistence is introduced.
+The database layer will become particularly important once PostgreSQL persistence is introduced.
 
 ---
 
@@ -789,8 +1111,9 @@ After PostgreSQL is introduced, tests should verify:
 * Durable transaction history
 * Persistent card balances
 * Persistent transaction lifecycle state
+* Persistent audit events
 
-The persistence tests should ensure that a transaction remains correct after:
+The persistence test flow should verify:
 
 ```text
 API Request
@@ -816,7 +1139,7 @@ This is one of the primary differences between the current in-memory implementat
 
 Payment amounts must be represented and tested with financial precision.
 
-Future tests should cover:
+Tests should cover:
 
 * Currency precision
 * Decimal boundaries
@@ -868,7 +1191,7 @@ For full refunds:
 refunded_amount == settled_amount
 ```
 
-The exact business rules should remain defined by the payment-domain implementation.
+The exact business rules remain defined by the payment-domain implementation.
 
 ---
 
@@ -908,15 +1231,100 @@ Future persistence testing should verify that these events survive application r
 
 ---
 
-# AI-Augmentation Strategy
+# Security Testing Considerations
 
-AI capabilities will be introduced after the payment-domain and reliability foundation is sufficiently mature.
+As the project evolves, security testing should cover:
 
-The AI layer is intended to assist testers and developers rather than replace deterministic automated validation.
+* Input validation
+* Authentication
+* Authorization
+* Rate limiting
+* Sensitive-data exposure
+* Logging of payment information
+* Secrets management
+* API abuse scenarios
+* Injection attacks
+* Insecure direct object references
+* Error-message information leakage
+* Idempotency abuse
+* Audit-log integrity
+
+The current project is a simulated payment gateway and is not a PCI-DSS-certified payment environment.
+
+Security testing should therefore demonstrate secure engineering practices rather than claim regulatory certification.
 
 ---
 
-## Root Cause Analysis
+# Observability Testing
+
+Observability will become increasingly important as the project moves toward reliability testing and AI-assisted RCA.
+
+Future observability testing should validate:
+
+* Structured application logs
+* Correlation IDs
+* Transaction identifiers
+* Request identifiers
+* Lifecycle event tracing
+* Error logging
+* API latency measurements
+* Failure classification
+* Trace propagation across services
+* Audit-event correlation
+
+A transaction should eventually be traceable across:
+
+```text
+API Request
+    │
+    ▼
+Payment Service
+    │
+    ▼
+Domain Operation
+    │
+    ▼
+Repository
+    │
+    ▼
+Database
+```
+
+This information will also provide useful context for the planned AI RCA pipeline.
+
+---
+
+# Performance Testing
+
+Performance testing is not part of the current regression baseline.
+
+Future performance testing should evaluate:
+
+* Authorization throughput
+* Capture throughput
+* Settlement throughput
+* Refund throughput
+* Concurrent transaction processing
+* API response latency
+* Database latency
+* Dashboard response time
+* Failure-handling latency
+
+Performance thresholds should be defined once the persistent architecture and deployment topology are established.
+
+---
+
+# AI-Augmentation Strategy
+
+AI capabilities will be introduced after the deterministic payment-domain and reliability foundation is sufficiently mature.
+
+The AI layer is intended to assist testers and developers rather than replace deterministic automated validation.
+
+AI output must never become the source of truth for payment correctness.
+
+---
+
+# Root Cause Analysis
 
 The planned RCA pipeline is:
 
@@ -947,7 +1355,7 @@ Developer / QA Review
 
 The system should retrieve similar historical failures before generating an explanation.
 
-The AI should not be treated as the source of truth for payment correctness.
+The AI should provide evidence-based assistance and should not silently determine whether a payment-system failure is acceptable.
 
 ---
 
@@ -995,13 +1403,11 @@ Future RCA evaluation should measure:
 * Absence of unsupported conclusions
 * Actionability of the suggested root cause
 
-Initial target:
+Initial evaluation target:
 
 > Correctly classify at least 8 out of 10 known, deterministically injected failure scenarios.
 
 This target should be reviewed once a representative evaluation dataset exists.
-
----
 
 ## Test Case Generation Validation
 
@@ -1015,7 +1421,7 @@ Generated test scenarios should be evaluated for:
 * Executability
 * Payment-domain correctness
 
-Initial target:
+Initial evaluation target:
 
 > Generate at least 5 relevant, non-duplicate edge-case scenarios per selected endpoint.
 
@@ -1062,7 +1468,7 @@ The regression strategy will expand as additional system layers are introduced.
 
 ## Current
 
-Changes affecting the following components should trigger the backend regression suite:
+Changes affecting the following components should trigger the appropriate regression suite:
 
 * Payment domain
 * State machine
@@ -1070,19 +1476,36 @@ Changes affecting the following components should trigger the backend regression
 * Repository
 * API endpoints
 * Request/response models
+* Idempotency behavior
+* Audit behavior
 * Transaction lifecycle behavior
+* Dashboard transaction behavior
+* E2E Page Objects
+* E2E fixtures
 
-Primary command:
+The primary command is:
 
 ```powershell
 pytest -v
 ```
 
+For UI-specific changes:
+
+```powershell
+pytest tests\e2e -v
+```
+
+For backend-only changes:
+
+```powershell
+pytest tests\api tests\unit -v
+```
+
 ---
 
-## Future
+# Future CI Regression Flow
 
-Once integration, UI, and CI infrastructure are implemented:
+Once CI infrastructure is implemented:
 
 ```text
 Pull Request
@@ -1100,10 +1523,10 @@ API Tests
 Integration Tests
     │
     ▼
-End-to-End Payment Tests
+Playwright E2E Tests
     │
     ▼
-UI Tests
+Reliability Tests
     │
     ▼
 AI Validation
@@ -1135,87 +1558,29 @@ No real:
 
 should be used.
 
+E2E fixtures should create disposable backend data specifically for each test scenario.
+
 Future persistent test environments should use isolated databases and disposable test data.
 
 ---
 
-# Security Testing Considerations
+# Test Isolation
 
-As the project evolves, security testing should cover:
+Tests should avoid depending on state created by unrelated tests.
 
-* Input validation
-* Authentication
-* Authorization
-* Rate limiting
-* Sensitive-data exposure
-* Logging of payment information
-* Secrets management
-* API abuse scenarios
-* Injection attacks
-* Insecure direct object references
-* Error-message information leakage
+Backend tests should use isolated fixtures and reset application state where necessary.
 
-The current project is a simulated payment gateway and is not a PCI-DSS-certified payment environment.
+E2E tests should create their required backend state through dedicated fixtures.
 
-Security testing should therefore demonstrate secure engineering practices rather than claim regulatory certification.
+The E2E suite should not rely on:
 
----
+* Transactions created by previous tests
+* Cards created by previous tests
+* Manual browser state
+* Production data
+* A specific execution order
 
-# Observability Testing
-
-Observability will become increasingly important as the project moves toward reliability testing and AI-assisted RCA.
-
-Future observability testing should validate:
-
-* Structured application logs
-* Correlation IDs
-* Transaction identifiers
-* Request identifiers
-* Lifecycle event tracing
-* Error logging
-* API latency measurements
-* Failure classification
-* Trace propagation across services
-
-A transaction should eventually be traceable across:
-
-```text
-API Request
-    │
-    ▼
-Payment Service
-    │
-    ▼
-Domain Operation
-    │
-    ▼
-Repository
-    │
-    ▼
-Database
-```
-
-This information will also provide useful context for the planned AI RCA pipeline.
-
----
-
-# Performance Testing
-
-Performance testing is not part of the current 64-test regression baseline.
-
-Future performance testing should evaluate:
-
-* Authorization throughput
-* Capture throughput
-* Settlement throughput
-* Refund throughput
-* Concurrent transaction processing
-* API response latency
-* Database latency
-* Dashboard response time
-* Failure-handling latency
-
-Performance thresholds should be defined once the persistent architecture and deployment topology are established.
+Each test should establish the minimum state required to validate its behavior.
 
 ---
 
@@ -1240,29 +1605,40 @@ Test Results
     ├── Stack Traces
     ├── Execution Time
     ├── Environment Metadata
+    ├── Browser Metadata
     └── Transaction / Correlation IDs
 ```
 
-These outputs will provide the foundation for the planned AI failure-analysis pipeline.
+Playwright failures should eventually retain useful browser diagnostics such as:
+
+* Screenshot
+* Trace
+* Console output
+* Network information
+* Failure location
+
+These artifacts will provide valuable context for future automated RCA.
 
 ---
 
 # Tools Summary
 
-| Tool                             | Purpose                                              | Status      |
-| -------------------------------- | ---------------------------------------------------- | ----------- |
-| Pytest                           | Unit, service, state-machine, and API test execution | Implemented |
-| FastAPI TestClient / HTTP Client | API endpoint testing                                 | Implemented |
-| Selenium                         | Browser automation for dashboard testing             | Planned     |
-| PostgreSQL                       | Persistent transaction and test data                 | Planned     |
-| SQLAlchemy                       | Database access layer                                | Planned     |
-| LangChain                        | LLM orchestration                                    | Planned     |
-| LangGraph                        | AI workflow orchestration                            | Planned     |
-| ChromaDB                         | Historical failure retrieval                         | Planned     |
-| Ollama                           | Local LLM inference                                  | Planned     |
-| Docker                           | Integrated test environment                          | Planned     |
-| GitHub Actions                   | CI/CD execution                                      | Planned     |
-| OpenTelemetry                    | Observability and tracing                            | Planned     |
+| Tool                             | Purpose                                                   | Status      |
+| -------------------------------- | --------------------------------------------------------- | ----------- |
+| Pytest                           | Unit, service, state-machine, API, and E2E test execution | Implemented |
+| HTTP Client / FastAPI TestClient | API endpoint testing and E2E data setup                   | Implemented |
+| Playwright                       | Browser automation for dashboard testing                  | Implemented |
+| Page Object Model                | Maintainable E2E UI abstraction                           | Implemented |
+| In-Memory Storage                | Deterministic local test persistence                      | Implemented |
+| PostgreSQL                       | Persistent transaction and test data                      | Planned     |
+| SQLAlchemy                       | Database access layer                                     | Planned     |
+| LangChain                        | LLM orchestration                                         | Planned     |
+| LangGraph                        | AI workflow orchestration                                 | Planned     |
+| ChromaDB                         | Historical failure retrieval                              | Planned     |
+| Ollama                           | Local LLM inference                                       | Planned     |
+| Docker                           | Integrated test environment                               | Planned     |
+| GitHub Actions                   | CI/CD execution                                           | Planned     |
+| OpenTelemetry                    | Observability and tracing                                 | Planned     |
 
 ---
 
@@ -1270,11 +1646,9 @@ These outputs will provide the foundation for the planned AI failure-analysis pi
 
 ## Completed
 
-* [x] 14 state-machine tests
-* [x] 14 payment-service tests
-* [x] 36 API tests
-* [x] 64 total automated backend tests
-* [x] Full regression suite passing
+* [x] State-machine testing
+* [x] Payment-service testing
+* [x] API testing
 * [x] Positive payment scenarios
 * [x] Negative payment scenarios
 * [x] Boundary-value testing
@@ -1283,28 +1657,60 @@ These outputs will provide the foundation for the planned AI failure-analysis pi
 * [x] Full refund testing
 * [x] Simulated timeout testing
 * [x] Simulated network-error testing
+* [x] Idempotency testing for authorization
+* [x] Audit-event testing
 * [x] Transaction lifecycle API functionality
 * [x] Web Dashboard transaction monitoring
 * [x] Dashboard transaction lifecycle visualization
-* [x] Lifecycle event and amount visibility
+* [x] Playwright dashboard smoke testing
+* [x] Playwright Transactions page testing
+* [x] Playwright empty-state testing
+* [x] Playwright authorized-transaction visibility
+* [x] Playwright lifecycle dialog testing
+* [x] E2E API fixture-based test data setup
+* [x] Page Object Model for Transactions
+* [x] Full regression suite passing
 
-## Planned
+## Current Regression Baseline
 
-* [ ] Automated Selenium dashboard testing
-* [ ] Automated end-to-end payment lifecycle tests
+```text
+96 tests collected
+96 passed
+0 failed
+```
+
+## Current E2E Baseline
+
+```text
+4 tests collected
+4 passed
+0 failed
+```
+
+---
+
+# Planned
+
+* [ ] Complete automated end-to-end payment lifecycle
+* [ ] Capture idempotency testing
+* [ ] Settlement idempotency testing
+* [ ] Refund idempotency testing
+* [ ] Concurrent transaction testing
 * [ ] PostgreSQL integration testing
-* [ ] Idempotency testing
-* [ ] Concurrency testing
 * [ ] Transaction rollback testing
 * [ ] Persistence failure testing
-* [ ] Monetary precision testing
+* [ ] Monetary precision expansion
 * [ ] Transaction consistency testing
 * [ ] Security testing
 * [ ] Performance testing
 * [ ] Observability validation
+* [ ] Playwright negative UI scenarios
+* [ ] Playwright backend-unavailable scenarios
+* [ ] Playwright API timeout scenarios
+* [ ] Playwright lifecycle-state visualization coverage
+* [ ] CI/CD integration
 * [ ] AI RCA validation
 * [ ] AI test-generation validation
-* [ ] CI/CD integration testing
 
 ---
 
@@ -1330,11 +1736,21 @@ Payment amounts and balances must remain internally consistent throughout the li
 
 ## Treat the Complete Lifecycle as a Workflow
 
-Individual endpoint correctness is necessary but insufficient. The platform must eventually validate authorization, capture, settlement, and refund as one coherent payment journey.
+Individual endpoint correctness is necessary but insufficient.
+
+The platform must eventually validate authorization, capture, settlement, and refund as one coherent payment journey.
 
 ## Keep UI Tests Focused
 
-Selenium tests should validate what a user can see and do. They should not simply reproduce every API test through a browser.
+Playwright tests should validate what a user can see and do.
+
+They should not simply reproduce every API test through a browser.
+
+## Use APIs for Deterministic E2E Setup
+
+Complex backend state should be created through controlled API fixtures when the purpose of the test is to validate UI behavior.
+
+This keeps browser tests focused on user-visible behavior.
 
 ## AI Is an Assistant, Not an Oracle
 
@@ -1343,6 +1759,10 @@ AI-generated root causes and test cases must be validated against deterministic 
 ## Preserve Regression Stability
 
 New functionality should extend the test suite without weakening the existing regression baseline.
+
+## Protect Payment Data
+
+Tests must use synthetic data and must never require real payment credentials or cardholder information.
 
 ---
 
@@ -1360,26 +1780,185 @@ Domain + Service + API Tests
         │
         ▼
 Phase 3
-Complete Lifecycle + Reliability Tests
+Idempotency + Audit + Lifecycle Tests
         │
         ▼
 Phase 4
-PostgreSQL + Integration Tests
+Playwright Dashboard + E2E Tests
         │
         ▼
 Phase 5
-Selenium + End-to-End Tests
+Reliability + Concurrency Tests
         │
         ▼
 Phase 6
-Observability + CI/CD
+PostgreSQL + Integration Tests
         │
         ▼
 Phase 7
+Observability + CI/CD
+        │
+        ▼
+Phase 8
 AI RCA + AI Test Generation
+```
 
+The current foundation consists of:
 
-The current foundation is the domain, service, and API test suite with a working dashboard for transaction and lifecycle inspection.
+* Domain and state-machine testing
+* Payment-service testing
+* API testing
+* Idempotency validation
+* Audit validation
+* A working dashboard
+* Playwright browser automation
+* API-backed E2E test fixtures
+* Transaction lifecycle UI validation
 
-The next major testing expansion should focus on **reliability, persistence, and automated end-to-end lifecycle validation** before introducing AI-driven test intelligence.
+The immediate testing priorities should be:
+
+1. Expand E2E coverage across the complete payment lifecycle.
+2. Extend idempotency testing beyond authorization.
+3. Add reliability and concurrency scenarios.
+4. Introduce persistent-storage integration tests.
+5. Improve Playwright failure diagnostics and negative-path coverage.
+6. Establish CI regression execution.
+7. Introduce AI-assisted RCA only after deterministic test and observability foundations are sufficiently mature.
+
+The AI layer should remain downstream of the deterministic testing foundation. A payment-testing platform that asks an LLM whether a broken payment is "probably fine" would be a spectacularly bad idea.
+
+---
+
+# Definition of Done for Test Coverage
+
+A feature should not be considered adequately tested merely because its happy path works.
+
+For payment functionality, the minimum expected coverage should consider:
+
+```text
+                ┌───────────────────┐
+                │  Happy Path       │
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ Negative Cases    │
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ Boundary Cases    │
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ State Transitions │
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ Financial Invariants│
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ Idempotency       │
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ Auditability      │
+                └─────────┬─────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ E2E Visibility    │
+                └───────────────────┘
+```
+
+The exact test layers required depend on the change.
+
+For example:
+
+| Change                   | Minimum Regression                          |
+| ------------------------ | ------------------------------------------- |
+| State transition         | State machine + service + affected API      |
+| Payment service          | Unit/service + affected API                 |
+| API contract             | API + affected E2E                          |
+| Idempotency              | API + reliability tests                     |
+| Dashboard transaction UI | Playwright E2E                              |
+| Lifecycle UI             | Playwright E2E + API                        |
+| Persistence              | Integration + API + E2E                     |
+| Observability            | Unit/integration + diagnostic validation    |
+| AI RCA                   | Deterministic failure suite + AI evaluation |
+
+---
+
+# Final Regression Standard
+
+The project should maintain the following standard before committing changes that affect tested functionality:
+
+```text
+pytest -v
+```
+
+Expected:
+
+```text
+96 passed
+0 failed
+```
+
+For E2E-affecting changes:
+
+```powershell
+pytest tests\e2e -v
+```
+
+Expected:
+
+```text
+4 passed
+```
+
+The exact test count will increase as coverage expands. The invariant is not the number `96`; the invariant is that the complete applicable regression suite remains green and that new behavior is accompanied by appropriate automated coverage.
+
+---
+
+# Conclusion
+
+PayGuard AI's testing strategy is built around deterministic validation of payment-domain behavior first, followed by increasingly broader system-level validation.
+
+The current implementation already provides:
+
+* State-machine tests
+* Payment-service tests
+* API tests
+* Idempotency tests
+* Audit tests
+* Playwright dashboard tests
+* API-backed E2E fixtures
+* Transaction visibility validation
+* Transaction lifecycle UI validation
+* A green full regression baseline
+
+The next stage should focus on increasing confidence across system boundaries rather than simply increasing the number of tests.
+
+The priority order is:
+
+```text
+Deterministic Domain Correctness
+        ↓
+Service Correctness
+        ↓
+API Correctness
+        ↓
+Idempotency + Auditability
+        ↓
+UI / E2E Coverage
+        ↓
+Reliability + Concurrency
+        ↓
+Persistence
+        ↓
+Observability
+        ↓
+CI/CD
+        ↓
+AI-Assisted Testing
+```
+
 
