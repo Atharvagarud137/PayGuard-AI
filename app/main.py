@@ -20,15 +20,12 @@ from app.models import (
     AuthorizeRequest,
     Card,
     CardCreateRequest,
-    CardStatus,
     CaptureRequest,
     RefundRequest,
-    Transaction,
-    TransactionEvent,
-    TransactionStatus,
 )
 
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.card_repository import CardRepository
 from app.repositories.idempotency_repository import IdempotencyRepository
 from app.repositories.transaction_repository import TransactionRepository
 
@@ -85,8 +82,13 @@ transaction_repository = TransactionRepository(
     storage
 )
 
+card_repository = CardRepository(
+    storage
+)
+
 payment_service = PaymentService(
-    transaction_repository
+    transaction_repository,
+    card_repository,
 )
 
 idempotency_repository = IdempotencyRepository(
@@ -405,13 +407,13 @@ def store_capture_idempotency_result(
 def issue_card(
         request: CardCreateRequest,
         x_simulate_failure: Optional[str] = Header(
-            default=None
+            default=None,
         ),
 ):
     """
     Issue a new virtual card.
 
-    Card persistence currently uses the shared in-memory storage.
+    Card persistence is delegated to the CardRepository.
     """
 
     check_simulated_failure(
@@ -420,7 +422,7 @@ def issue_card(
 
     card_number = generate_masked_card_number()
 
-    while storage.card_exists_with_number(
+    while card_repository.exists_with_number(
             card_number
     ):
         card_number = generate_masked_card_number()
@@ -433,7 +435,7 @@ def issue_card(
         expiry_date=request.expiry_date,
     )
 
-    storage.add_card(
+    card_repository.add(
         card
     )
 
@@ -450,7 +452,7 @@ def issue_card(
 def authorize_transaction(
         request: AuthorizeRequest,
         x_simulate_failure: Optional[str] = Header(
-            default=None
+            default=None,
         ),
         idempotency_key: Optional[str] = Header(
             default=None,
@@ -463,6 +465,22 @@ def authorize_transaction(
 ):
     """
     Authorize a payment against an active card.
+
+    The PaymentService owns authorization business logic, including:
+
+        - Card lookup
+        - Card status validation
+        - Insufficient-funds decisions
+        - Balance deduction
+        - Transaction creation
+
+    The API layer is responsible for:
+
+        - HTTP request handling
+        - Idempotency
+        - Correlation IDs
+        - Audit recording
+        - HTTP error translation
 
     Idempotency behavior:
 
@@ -503,14 +521,17 @@ def authorize_transaction(
         return existing_response
 
     # ------------------------------------------------------------------------
-    # Card Validation
+    # Authorization Business Operation
     # ------------------------------------------------------------------------
 
-    card = storage.get_card(
-        request.card_id
-    )
+    try:
+        transaction = payment_service.authorize(
+            card_id=request.card_id,
+            amount=request.amount,
+            merchant_id=request.merchant_id,
+        )
 
-    if not card:
+    except TransactionNotFoundError as exc:
         audit_service.record(
             event_type=AuditEventType.AUTHORIZATION,
             action="AUTHORIZE",
@@ -519,15 +540,15 @@ def authorize_transaction(
             card_id=request.card_id,
             merchant_id=request.merchant_id,
             amount=request.amount,
-            detail="Card not found",
+            detail=str(exc),
         )
 
         raise HTTPException(
             status_code=404,
-            detail="Card not found",
-        )
+            detail=str(exc),
+        ) from exc
 
-    if card.status != CardStatus.ACTIVE:
+    except InvalidTransactionStateError as exc:
         audit_service.record(
             event_type=AuditEventType.AUTHORIZATION,
             action="AUTHORIZE",
@@ -536,37 +557,19 @@ def authorize_transaction(
             card_id=request.card_id,
             merchant_id=request.merchant_id,
             amount=request.amount,
-            detail="Card is not active",
+            detail=str(exc),
         )
 
         raise HTTPException(
             status_code=400,
-            detail="Card is not active",
-        )
+            detail=str(exc),
+        ) from exc
 
     # ------------------------------------------------------------------------
-    # Authorization Decision
+    # Declined Authorization
     # ------------------------------------------------------------------------
 
-    if card.balance < request.amount:
-        transaction = Transaction(
-            card_id=request.card_id,
-            merchant_id=request.merchant_id,
-            status=TransactionStatus.DECLINED,
-            decline_reason="INSUFFICIENT_FUNDS",
-        )
-
-        transaction.history.append(
-            TransactionEvent(
-                status=TransactionStatus.DECLINED,
-                detail="Insufficient funds",
-            )
-        )
-
-        transaction_repository.add(
-            transaction
-        )
-
+    if transaction.status.value == "DECLINED":
         response = {
             "transaction_id": transaction.transaction_id,
             "status": transaction.status,
@@ -579,8 +582,8 @@ def authorize_transaction(
             outcome="DECLINED",
             correlation_id=correlation_id,
             transaction_id=transaction.transaction_id,
-            card_id=request.card_id,
-            merchant_id=request.merchant_id,
+            card_id=transaction.card_id,
+            merchant_id=transaction.merchant_id,
             amount=request.amount,
             detail="Insufficient funds",
         )
@@ -597,30 +600,6 @@ def authorize_transaction(
     # Successful Authorization
     # ------------------------------------------------------------------------
 
-    card.balance -= request.amount
-
-    storage.update_card(
-        card
-    )
-
-    transaction = Transaction(
-        card_id=request.card_id,
-        merchant_id=request.merchant_id,
-        authorized_amount=request.amount,
-        status=TransactionStatus.AUTHORIZED,
-    )
-
-    transaction.history.append(
-        TransactionEvent(
-            status=TransactionStatus.AUTHORIZED,
-            detail="Authorization approved",
-        )
-    )
-
-    transaction_repository.add(
-        transaction
-    )
-
     response = {
         "transaction_id": transaction.transaction_id,
         "status": transaction.status,
@@ -633,8 +612,8 @@ def authorize_transaction(
         outcome="SUCCESS",
         correlation_id=correlation_id,
         transaction_id=transaction.transaction_id,
-        card_id=request.card_id,
-        merchant_id=request.merchant_id,
+        card_id=transaction.card_id,
+        merchant_id=transaction.merchant_id,
         amount=request.amount,
         detail="Authorization approved",
     )
@@ -659,7 +638,7 @@ def capture_transaction(
         transaction_id: str,
         request: CaptureRequest,
         x_simulate_failure: Optional[str] = Header(
-            default=None
+            default=None,
         ),
         idempotency_key: Optional[str] = Header(
             default=None,
@@ -715,7 +694,6 @@ def capture_transaction(
         )
 
     except TransactionNotFoundError as exc:
-
         audit_service.record(
             event_type=AuditEventType.CAPTURE,
             action="CAPTURE",
@@ -732,7 +710,6 @@ def capture_transaction(
         ) from exc
 
     except CaptureAmountExceededError as exc:
-
         audit_service.record(
             event_type=AuditEventType.CAPTURE,
             action="CAPTURE",
@@ -749,7 +726,6 @@ def capture_transaction(
         ) from exc
 
     except InvalidTransactionStateError as exc:
-
         audit_service.record(
             event_type=AuditEventType.CAPTURE,
             action="CAPTURE",
@@ -815,7 +791,7 @@ def capture_transaction(
 def settle_transaction(
         transaction_id: str,
         x_simulate_failure: Optional[str] = Header(
-            default=None
+            default=None,
         ),
         correlation_id: Optional[str] = Header(
             default=None,
@@ -840,7 +816,6 @@ def settle_transaction(
         )
 
     except TransactionNotFoundError as exc:
-
         audit_service.record(
             event_type=AuditEventType.SETTLEMENT,
             action="SETTLE",
@@ -856,7 +831,6 @@ def settle_transaction(
         ) from exc
 
     except InvalidTransactionStateError as exc:
-
         audit_service.record(
             event_type=AuditEventType.SETTLEMENT,
             action="SETTLE",
@@ -905,7 +879,7 @@ def refund_transaction(
         transaction_id: str,
         request: RefundRequest,
         x_simulate_failure: Optional[str] = Header(
-            default=None
+            default=None,
         ),
         correlation_id: Optional[str] = Header(
             default=None,
@@ -931,7 +905,6 @@ def refund_transaction(
         )
 
     except TransactionNotFoundError as exc:
-
         audit_service.record(
             event_type=AuditEventType.REFUND,
             action="REFUND",
@@ -948,7 +921,6 @@ def refund_transaction(
         ) from exc
 
     except RefundAmountExceededError as exc:
-
         audit_service.record(
             event_type=AuditEventType.REFUND,
             action="REFUND",
@@ -965,7 +937,6 @@ def refund_transaction(
         ) from exc
 
     except InvalidTransactionStateError as exc:
-
         audit_service.record(
             event_type=AuditEventType.REFUND,
             action="REFUND",
@@ -1025,7 +996,7 @@ def get_transaction(
     Retrieve a transaction by its unique identifier.
     """
 
-    transaction = transaction_repository.get(
+    transaction = payment_service.get_transaction(
         transaction_id
     )
 
@@ -1056,7 +1027,7 @@ def get_transaction_audit_events(
     payloads.
     """
 
-    transaction = transaction_repository.get(
+    transaction = payment_service.get_transaction(
         transaction_id
     )
 

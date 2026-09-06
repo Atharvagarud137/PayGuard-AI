@@ -1,19 +1,20 @@
 from typing import Optional
 
 from app.models import Transaction
+from app.repositories.interfaces import TransactionRepositoryProtocol
 from app.storage import InMemoryStorage, storage
 
 
-class TransactionRepository:
+class TransactionRepository(TransactionRepositoryProtocol):
     """
-    Persistence abstraction for transaction data.
+    Concrete persistence implementation for transaction data.
 
-    The repository supports dependency injection while retaining backward
-    compatibility with existing callers and unit tests.
+    This implementation currently uses the in-memory storage backend.
+    Application services should depend on TransactionRepositoryProtocol
+    rather than this concrete class.
 
-    If no storage backend is supplied, the application's shared in-memory
-    storage is used. A different storage implementation can be injected
-    later without changing the PaymentService interface.
+    The storage backend is injectable so the repository can later be backed
+    by PostgreSQL without changing the service-layer contract.
     """
 
     def __init__(

@@ -1,19 +1,20 @@
 from typing import Optional
 
 from app.models import Card
+from app.repositories.interfaces import CardRepositoryProtocol
 from app.storage import InMemoryStorage, storage
 
 
-class CardRepository:
+class CardRepository(CardRepositoryProtocol):
     """
-    Persistence abstraction for card data.
+    Concrete persistence implementation for card data.
 
-    The repository isolates card persistence from the API layer and supports
-    dependency injection while retaining compatibility with the application's
-    shared in-memory storage.
+    This implementation currently uses the in-memory storage backend.
+    Application code should depend on CardRepositoryProtocol rather than
+    this concrete implementation.
 
-    A database-backed implementation can replace the storage backend later
-    without requiring changes to the API or business logic.
+    The storage backend is injectable so a database-backed implementation
+    can be introduced later without changing the repository contract.
     """
 
     def __init__(

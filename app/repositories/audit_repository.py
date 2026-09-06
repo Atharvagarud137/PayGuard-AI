@@ -2,19 +2,20 @@ from copy import deepcopy
 from typing import List, Optional
 
 from app.models import AuditEvent
+from app.repositories.interfaces import AuditRepositoryProtocol
 from app.storage import InMemoryStorage
 
 
-class AuditRepository:
+class AuditRepository(AuditRepositoryProtocol):
     """
-    Persistence abstraction for audit events.
+    Concrete persistence implementation for audit events.
 
     The repository is responsible only for storing and retrieving audit
-    records. It does not contain business logic.
+    records. Business logic remains in the service layer.
 
-    The current implementation uses the shared in-memory storage backend.
+    This implementation currently uses the in-memory storage backend.
     A database-backed implementation can replace this repository later
-    without changing the AuditService interface.
+    without changing the AuditService contract.
     """
 
     def __init__(
@@ -33,10 +34,7 @@ class AuditRepository:
     ) -> None:
         """
         Persist an audit event.
-
-        The storage layer owns the actual persistence mechanism.
         """
-
         self.storage.add_audit_event(event)
 
     def get(
@@ -49,7 +47,6 @@ class AuditRepository:
         Returns:
             A defensive copy of the AuditEvent if found, otherwise None.
         """
-
         event = self.storage.get_audit_event(audit_event_id)
 
         if event is None:
@@ -62,9 +59,8 @@ class AuditRepository:
         Return all persisted audit events.
 
         Defensive copies are returned so callers cannot accidentally mutate
-        the persisted audit records held by the storage backend.
+        persisted audit records held by the storage backend.
         """
-
         events = self.storage.list_audit_events()
 
         return [
@@ -82,7 +78,6 @@ class AuditRepository:
         Only events whose transaction_id exactly matches the supplied
         transaction_id are returned.
         """
-
         events = self.storage.list_audit_events()
 
         return [
@@ -101,7 +96,6 @@ class AuditRepository:
         Only events whose correlation_id exactly matches the supplied
         correlation_id are returned.
         """
-
         events = self.storage.list_audit_events()
 
         return [

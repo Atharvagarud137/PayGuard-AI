@@ -1,13 +1,17 @@
 import pytest
 
 from app.models import Transaction, TransactionStatus
+from app.repositories.card_repository import CardRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.services.payment_service import PaymentService
 
 
 @pytest.fixture
 def payment_service():
-    return PaymentService(TransactionRepository())
+    return PaymentService(
+        TransactionRepository(),
+        CardRepository(),
+    )
 
 
 @pytest.fixture

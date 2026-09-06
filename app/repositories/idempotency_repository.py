@@ -1,18 +1,19 @@
 from typing import Any, Dict, Optional
 
+from app.repositories.interfaces import IdempotencyRepositoryProtocol
 from app.storage import InMemoryStorage, storage
 
 
-class IdempotencyRepository:
+class IdempotencyRepository(IdempotencyRepositoryProtocol):
     """
-    Persistence abstraction for idempotency records.
+    Concrete persistence implementation for idempotency records.
 
     The repository deliberately contains no idempotency business rules.
     It only provides persistence operations.
 
-    This allows the current in-memory implementation to later be replaced
-    by a PostgreSQL-backed implementation without changing the API or
-    service-level idempotency behavior.
+    This implementation currently uses the in-memory storage backend.
+    A PostgreSQL-backed implementation can replace it later without
+    changing the API or service-level idempotency behavior.
     """
 
     def __init__(

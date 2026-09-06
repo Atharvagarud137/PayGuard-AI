@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from app.models import AuditEvent, AuditEventType
-from app.repositories.audit_repository import AuditRepository
+from app.repositories.interfaces import AuditRepositoryProtocol
 
 
 class AuditService:
@@ -11,6 +11,10 @@ class AuditService:
 
     The AuditService centralizes audit-event creation so API routes and
     payment services do not need to know how audit records are persisted.
+
+    The service depends on AuditRepositoryProtocol rather than a concrete
+    persistence implementation, allowing the underlying storage mechanism
+    to change without changing audit business logic.
 
     Security principle:
 
@@ -21,7 +25,7 @@ class AuditService:
 
     def __init__(
             self,
-            repository: AuditRepository,
+            repository: AuditRepositoryProtocol,
     ) -> None:
         self.repository = repository
 

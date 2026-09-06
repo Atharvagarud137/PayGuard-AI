@@ -11,27 +11,36 @@ from app.domain.state_machine import (
     validate_transition,
 )
 from app.models import (
+    CardStatus,
     Transaction,
     TransactionEvent,
     TransactionStatus,
 )
-from app.repositories.transaction_repository import TransactionRepository
+from app.repositories.interfaces import (
+    CardRepositoryProtocol,
+    TransactionRepositoryProtocol,
+)
 
 
 class PaymentService:
     """
     Contains payment transaction business logic.
 
-    The service layer owns transaction lifecycle operations and delegates
-    persistence to the TransactionRepository. It does not access storage
-    directly.
+    The service layer owns payment lifecycle operations and delegates
+    persistence to repository contracts.
+
+    The service depends on repository protocols rather than concrete
+    persistence implementations, allowing the underlying storage mechanism
+    to change without changing payment business logic.
     """
 
     def __init__(
             self,
-            repository: TransactionRepository,
+            repository: TransactionRepositoryProtocol,
+            card_repository: CardRepositoryProtocol,
     ) -> None:
         self.repository = repository
+        self.card_repository = card_repository
 
     # -----------------------------------------------------------------------
     # Transaction Lookup
@@ -48,6 +57,88 @@ class PaymentService:
             The transaction if found, otherwise None.
         """
         return self.repository.get(transaction_id)
+
+    # -----------------------------------------------------------------------
+    # Authorization
+    # -----------------------------------------------------------------------
+
+    def authorize(
+            self,
+            card_id: str,
+            amount: Decimal,
+            merchant_id: str,
+    ) -> Transaction:
+        """
+        Authorize a payment against a card.
+
+        Authorization business rules belong to the payment service rather
+        than the API layer.
+
+        Behavior:
+        - Missing cards result in a transaction lookup failure.
+        - Inactive cards cannot be authorized.
+        - Insufficient funds create a DECLINED transaction.
+        - Successful authorization deducts the authorized amount from the
+          card balance and creates an AUTHORIZED transaction.
+
+        Returns:
+            The newly created payment transaction.
+
+        Raises:
+            TransactionNotFoundError:
+                If the requested card does not exist.
+
+            InvalidTransactionStateError:
+                If the card is not active.
+        """
+
+        card = self.card_repository.get(card_id)
+
+        if not card:
+            raise TransactionNotFoundError(
+                "Card not found"
+            )
+
+        if card.status != CardStatus.ACTIVE:
+            raise InvalidTransactionStateError(
+                "Card is not active"
+            )
+
+        transaction = Transaction(
+            card_id=card.card_id,
+            merchant_id=merchant_id,
+            authorized_amount=amount,
+            status=TransactionStatus.AUTHORIZED,
+        )
+
+        if card.balance < amount:
+            transaction.status = TransactionStatus.DECLINED
+            transaction.decline_reason = "INSUFFICIENT_FUNDS"
+
+            transaction.history.append(
+                TransactionEvent(
+                    status=TransactionStatus.DECLINED,
+                    detail="Authorization declined: insufficient funds",
+                )
+            )
+
+            self.repository.add(transaction)
+
+            return transaction
+
+        card.balance -= amount
+        self.card_repository.update(card)
+
+        transaction.history.append(
+            TransactionEvent(
+                status=TransactionStatus.AUTHORIZED,
+                detail="Payment authorized",
+            )
+        )
+
+        self.repository.add(transaction)
+
+        return transaction
 
     # -----------------------------------------------------------------------
     # Capture
@@ -215,7 +306,6 @@ class PaymentService:
             else TransactionStatus.PARTIALLY_REFUNDED
         )
 
-        # Validate the state transition BEFORE mutating the transaction.
         self._validate_transition(
             current_status=transaction.status,
             target_status=target_status,
