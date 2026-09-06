@@ -15,6 +15,13 @@ class CardRepository(CardRepositoryProtocol):
 
     The storage backend is injectable so a database-backed implementation
     can be introduced later without changing the repository contract.
+
+    PostgreSQL-backed card persistence is provided separately by
+    PostgresCardRepository.
+
+    The get_for_update() method exists for protocol compatibility with
+    PostgreSQL-backed repositories. The in-memory backend does not provide
+    database row-level locking, so it returns the same result as get().
     """
 
     def __init__(
@@ -43,8 +50,25 @@ class CardRepository(CardRepositoryProtocol):
         """
         Retrieve a card by its unique identifier.
 
+        This is a read-only retrieval and does not acquire a lock.
+
         Returns:
             The card if found, otherwise None.
+        """
+        return self.storage.get_card(card_id)
+
+    def get_for_update(
+            self,
+            card_id: str,
+    ) -> Optional[Card]:
+        """
+        Retrieve a card for a mutation operation.
+
+        The in-memory backend does not support database row-level locking.
+        Therefore, this method has the same retrieval behavior as get().
+
+        PostgreSQL-backed implementations override this behavior with
+        SELECT ... FOR UPDATE.
         """
         return self.storage.get_card(card_id)
 

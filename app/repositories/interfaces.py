@@ -9,33 +9,93 @@ class CardRepositoryProtocol(Protocol):
 
     Application code depends on this contract rather than on a specific
     persistence implementation.
+
+    Implementations may provide a row-locking retrieval operation for
+    payment operations that read and mutate card state, such as
+    authorization.
     """
 
-    def add(self, card: Card) -> None:
+    def add(
+            self,
+            card: Card,
+    ) -> None:
         ...
 
-    def get(self, card_id: str) -> Optional[Card]:
+    def get(
+            self,
+            card_id: str,
+    ) -> Optional[Card]:
         ...
 
-    def update(self, card: Card) -> None:
+    def get_for_update(
+            self,
+            card_id: str,
+    ) -> Optional[Card]:
+        """
+        Retrieve a card while acquiring a database row lock.
+
+        PostgreSQL-backed implementations use SELECT ... FOR UPDATE so
+        concurrent operations that modify the same card are serialized
+        within the current database transaction.
+
+        Implementations that do not support row-level locking may provide
+        the same retrieval behavior without a lock.
+        """
         ...
 
-    def exists_with_number(self, card_number: str) -> bool:
+    def update(
+            self,
+            card: Card,
+    ) -> None:
+        ...
+
+    def exists_with_number(
+            self,
+            card_number: str,
+    ) -> bool:
         ...
 
 
 class TransactionRepositoryProtocol(Protocol):
     """
     Persistence contract for payment transactions.
+
+    Implementations may provide a row-locking retrieval operation for
+    payment lifecycle operations that require serialized updates.
     """
 
-    def add(self, transaction: Transaction) -> None:
+    def add(
+            self,
+            transaction: Transaction,
+    ) -> None:
         ...
 
-    def get(self, transaction_id: str) -> Optional[Transaction]:
+    def get(
+            self,
+            transaction_id: str,
+    ) -> Optional[Transaction]:
         ...
 
-    def update(self, transaction: Transaction) -> None:
+    def get_for_update(
+            self,
+            transaction_id: str,
+    ) -> Optional[Transaction]:
+        """
+        Retrieve a transaction while acquiring a database row lock.
+
+        PostgreSQL-backed implementations use SELECT ... FOR UPDATE so
+        concurrent lifecycle operations on the same transaction are
+        serialized within the current database transaction.
+
+        Implementations that do not support row-level locking may provide
+        the same retrieval behavior without a lock.
+        """
+        ...
+
+    def update(
+            self,
+            transaction: Transaction,
+    ) -> None:
         ...
 
 
@@ -44,13 +104,21 @@ class AuditRepositoryProtocol(Protocol):
     Persistence contract for audit events.
     """
 
-    def add(self, event: AuditEvent) -> None:
+    def add(
+            self,
+            event: AuditEvent,
+    ) -> None:
         ...
 
-    def get(self, audit_event_id: str) -> Optional[AuditEvent]:
+    def get(
+            self,
+            audit_event_id: str,
+    ) -> Optional[AuditEvent]:
         ...
 
-    def list_all(self) -> List[AuditEvent]:
+    def list_all(
+            self,
+    ) -> List[AuditEvent]:
         ...
 
     def list_by_transaction(

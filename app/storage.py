@@ -30,17 +30,16 @@ class InMemoryStorage:
         # -------------------------------------------------------------------
         # Audit Events
         # -------------------------------------------------------------------
-        #
+
         # Audit events are stored separately from payment transactions.
         # They represent operational/security history and do not contain
         # raw sensitive payment payloads.
-        #
         self.audit_events: Dict[str, AuditEvent] = {}
 
         # -------------------------------------------------------------------
         # Idempotency Records
         # -------------------------------------------------------------------
-        #
+
         # Each record contains:
         #
         #   fingerprint -> deterministic representation of the request

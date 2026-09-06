@@ -32,6 +32,10 @@ class PaymentService:
     The service depends on repository protocols rather than concrete
     persistence implementations, allowing the underlying storage mechanism
     to change without changing payment business logic.
+
+    Transaction lifecycle operations that mutate an existing transaction
+    retrieve it through get_for_update() so PostgreSQL-backed repositories
+    can serialize concurrent updates using row-level locking.
     """
 
     def __init__(
@@ -52,6 +56,9 @@ class PaymentService:
     ) -> Transaction | None:
         """
         Retrieve a transaction by ID.
+
+        This is a read-only operation and therefore does not acquire a
+        database row lock.
 
         Returns:
             The transaction if found, otherwise None.
@@ -81,6 +88,11 @@ class PaymentService:
         - Successful authorization deducts the authorized amount from the
           card balance and creates an AUTHORIZED transaction.
 
+        The card is retrieved using get_for_update() so a PostgreSQL-backed
+        repository can acquire a row-level lock before the balance is read
+        and modified. This prevents concurrent authorization operations from
+        spending the same available balance.
+
         Returns:
             The newly created payment transaction.
 
@@ -92,7 +104,7 @@ class PaymentService:
                 If the card is not active.
         """
 
-        card = self.card_repository.get(card_id)
+        card = self.card_repository.get_for_update(card_id)
 
         if not card:
             raise TransactionNotFoundError(
@@ -154,9 +166,13 @@ class PaymentService:
 
         A transaction must be in AUTHORIZED state before capture.
         The capture amount cannot exceed the authorized amount.
+
+        The transaction is retrieved using get_for_update() so a
+        PostgreSQL-backed repository can acquire a row-level lock before
+        validating and modifying the transaction.
         """
 
-        transaction = self.repository.get(transaction_id)
+        transaction = self.repository.get_for_update(transaction_id)
 
         if not transaction:
             raise TransactionNotFoundError(
@@ -211,9 +227,13 @@ class PaymentService:
 
         A transaction must be in CAPTURED state before settlement.
         The settled amount is equal to the captured amount.
+
+        The transaction is retrieved using get_for_update() so a
+        PostgreSQL-backed repository can acquire a row-level lock before
+        validating and modifying the transaction.
         """
 
-        transaction = self.repository.get(transaction_id)
+        transaction = self.repository.get_for_update(transaction_id)
 
         if not transaction:
             raise TransactionNotFoundError(
@@ -263,12 +283,16 @@ class PaymentService:
         - Multiple partial refunds
         - Partial refund followed by a final full refund
 
+        The transaction is retrieved using get_for_update() so a
+        PostgreSQL-backed repository can serialize concurrent refund
+        operations against the same transaction.
+
         Returns:
             A tuple containing the updated transaction and the remaining
             refundable balance.
         """
 
-        transaction = self.repository.get(transaction_id)
+        transaction = self.repository.get_for_update(transaction_id)
 
         if not transaction:
             raise TransactionNotFoundError(

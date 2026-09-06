@@ -4,6 +4,10 @@ pydantic
 pytest
 httpx
 selenium
+playwright
+sqlalchemy
+psycopg[binary]
+alembic
 langchain
 langchain-community
 chromadb
