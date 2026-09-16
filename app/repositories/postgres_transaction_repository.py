@@ -19,9 +19,9 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
     Transaction lifecycle rules remain in the service/domain layer.
     This repository is responsible for persistence, retrieval, and mapping.
 
-    The repository does not commit transactions. Transaction boundaries are
-    owned by the caller so that a complete payment operation can execute
-    atomically within a single database transaction.
+    The repository does not commit or rollback transactions. Transaction
+    boundaries are owned by the caller so that a complete payment operation
+    can execute atomically within a single database transaction.
 
     Lifecycle operations that perform read-modify-write transitions should
     use get_for_update() so PostgreSQL can serialize concurrent updates to
@@ -43,19 +43,21 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             transaction: Transaction,
     ) -> None:
         """
-        Persist a new transaction and its lifecycle events.
+        Persist a new transaction and its lifecycle history.
 
-        The transaction itself and all supplied events are added to the
+        The transaction and all supplied lifecycle events are added to the
         current SQLAlchemy session. The caller owns the eventual commit.
         """
         transaction_db = self._to_db_model(transaction)
 
         self.db.add(transaction_db)
+        self.db.flush()
 
         for event in transaction.history:
             self.db.add(
                 self._event_to_db_model(
-                    event,
+                    event=event,
+                    transaction_id=transaction.transaction_id,
                 )
             )
 
@@ -97,13 +99,13 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
         """
         Persist changes to an existing transaction.
 
-        Existing lifecycle events are treated as append-only records.
-        Events already persisted are left unchanged, while newly introduced
-        domain events are inserted.
+        Transaction lifecycle events are append-only. Existing persisted
+        events are preserved, while new events present in the domain
+        transaction history are appended.
 
-        The persisted transaction version is preserved here. Concurrency
-        control is handled by the surrounding transaction and, for lifecycle
-        operations, get_for_update().
+        The transaction version is not modified here. Concurrency control
+        for lifecycle operations is provided by get_for_update() and the
+        surrounding database transaction.
 
         Raises:
             ValueError:
@@ -130,27 +132,24 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
         transaction_db.merchant_id = transaction.merchant_id
 
         transaction_db.authorized_amount = Decimal(
-            transaction.authorized_amount
+            str(transaction.authorized_amount),
         )
-
         transaction_db.captured_amount = Decimal(
-            transaction.captured_amount
+            str(transaction.captured_amount),
         )
-
         transaction_db.settled_amount = Decimal(
-            transaction.settled_amount
+            str(transaction.settled_amount),
         )
-
         transaction_db.refunded_amount = Decimal(
-            transaction.refunded_amount
+            str(transaction.refunded_amount),
         )
 
         transaction_db.status = transaction.status.value
         transaction_db.decline_reason = transaction.decline_reason
 
         self._synchronize_events(
-            transaction_db,
-            transaction,
+            transaction_db=transaction_db,
+            transaction=transaction,
         )
 
         self.db.flush()
@@ -217,16 +216,16 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             card_id=transaction.card_id,
             merchant_id=transaction.merchant_id,
             authorized_amount=Decimal(
-                transaction.authorized_amount
+                str(transaction.authorized_amount),
             ),
             captured_amount=Decimal(
-                transaction.captured_amount
+                str(transaction.captured_amount),
             ),
             settled_amount=Decimal(
-                transaction.settled_amount
+                str(transaction.settled_amount),
             ),
             refunded_amount=Decimal(
-                transaction.refunded_amount
+                str(transaction.refunded_amount),
             ),
             status=transaction.status.value,
             decline_reason=transaction.decline_reason,
@@ -242,6 +241,11 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
         Convert a SQLAlchemy TransactionDB instance into the domain
         Transaction model.
         """
+        events = sorted(
+            transaction_db.events,
+            key=lambda event: event.created_at,
+        )
+
         return Transaction(
             transaction_id=transaction_db.id,
             card_id=transaction_db.card_id,
@@ -254,9 +258,9 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             decline_reason=transaction_db.decline_reason,
             history=[
                 PostgresTransactionRepository._event_to_domain_model(
-                    event
+                    event,
                 )
-                for event in transaction_db.events
+                for event in events
             ],
             created_at=transaction_db.created_at,
         )
@@ -264,27 +268,37 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
     @staticmethod
     def _event_to_db_model(
             event: TransactionEvent,
+            transaction_id: str,
     ) -> TransactionEventDB:
         """
         Convert a domain TransactionEvent into a SQLAlchemy
         TransactionEventDB instance.
+
+        The domain model intentionally contains only status, timestamp,
+        and detail. Persistence-specific identifiers and relationships are
+        generated here rather than leaking into the domain model.
+
+        The lifecycle status is stored as both event_type and status because
+        the current domain event model does not define a separate event
+        type.
+
+        The optional domain detail is preserved in metadata_json.
         """
+        metadata_json = None
+
+        if event.detail is not None:
+            metadata_json = {
+                "detail": event.detail,
+            }
+
         return TransactionEventDB(
-            id=event.id,
-            transaction_id=event.transaction_id,
-            event_type=event.event_type.value,
-            amount=(
-                Decimal(event.amount)
-                if event.amount is not None
-                else None
-            ),
-            status=(
-                event.status.value
-                if event.status is not None
-                else None
-            ),
-            metadata_json=event.metadata_json,
-            created_at=event.created_at,
+            id=_generate_event_id(),
+            transaction_id=transaction_id,
+            event_type=event.status.value,
+            amount=None,
+            status=event.status.value,
+            metadata_json=metadata_json,
+            created_at=event.timestamp,
         )
 
     @staticmethod
@@ -295,14 +309,15 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
         Convert a SQLAlchemy TransactionEventDB instance into the domain
         TransactionEvent model.
         """
+        detail = None
+
+        if event_db.metadata_json:
+            detail = event_db.metadata_json.get("detail")
+
         return TransactionEvent(
-            id=event_db.id,
-            transaction_id=event_db.transaction_id,
-            event_type=event_db.event_type,
-            amount=event_db.amount,
             status=event_db.status,
-            metadata_json=event_db.metadata_json,
-            created_at=event_db.created_at,
+            timestamp=event_db.created_at,
+            detail=detail,
         )
 
     # -----------------------------------------------------------------------
@@ -315,23 +330,44 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             transaction: Transaction,
     ) -> None:
         """
-        Add lifecycle events that exist in the domain transaction but have
+        Append lifecycle events that exist in the domain history but have
         not yet been persisted.
 
-        Transaction events are append-only. Existing events are never
-        modified or deleted.
+        TransactionEvent does not contain a persistent identifier, so
+        synchronization is based on the append-only history model rather
+        than an event ID.
+
+        Existing database events are never modified or deleted.
         """
-        existing_event_ids = {
-            event.id
-            for event in transaction_db.events
-        }
+        existing_events = sorted(
+            transaction_db.events,
+            key=lambda event: event.created_at,
+        )
 
-        for event in transaction.history:
-            if event.id in existing_event_ids:
-                continue
+        existing_count = len(existing_events)
+        domain_events = transaction.history
 
+        if existing_count >= len(domain_events):
+            return
+
+        new_events = domain_events[existing_count:]
+
+        for event in new_events:
             self.db.add(
                 self._event_to_db_model(
-                    event,
+                    event=event,
+                    transaction_id=transaction.transaction_id,
                 )
             )
+
+
+def _generate_event_id() -> str:
+    """
+    Generate a persistence-only identifier for a transaction event.
+
+    TransactionEvent intentionally does not expose this identifier in the
+    domain model.
+    """
+    from uuid import uuid4
+
+    return str(uuid4())

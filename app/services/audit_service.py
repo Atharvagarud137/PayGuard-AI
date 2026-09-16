@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from decimal import Decimal
+from typing import Any, List, Optional
 
 from app.models import AuditEvent, AuditEventType
 from app.repositories.interfaces import AuditRepositoryProtocol
@@ -52,7 +53,17 @@ class AuditService:
 
         The method intentionally does not accept arbitrary request payloads.
         This prevents accidental persistence of sensitive data.
+
+        Monetary values are normalized through Decimal before being passed
+        to the domain model so audit persistence does not depend on binary
+        floating-point representation.
         """
+        normalized_amount: Optional[Decimal] = None
+
+        if amount is not None:
+            normalized_amount = Decimal(
+                str(amount),
+            )
 
         event = AuditEvent(
             event_type=event_type,
@@ -62,7 +73,7 @@ class AuditService:
             transaction_id=transaction_id,
             card_id=card_id,
             merchant_id=merchant_id,
-            amount=amount,
+            amount=normalized_amount,
             detail=detail,
             timestamp=datetime.now(timezone.utc),
         )
@@ -82,36 +93,34 @@ class AuditService:
         """
         Retrieve an audit event by ID.
         """
+        return self.repository.get(
+            audit_event_id,
+        )
 
-        return self.repository.get(audit_event_id)
-
-    def list_all(self):
+    def list_all(self) -> List[AuditEvent]:
         """
         Retrieve all audit events.
         """
-
         return self.repository.list_all()
 
     def list_by_transaction(
             self,
             transaction_id: str,
-    ):
+    ) -> List[AuditEvent]:
         """
         Retrieve audit events associated with a transaction.
         """
-
         return self.repository.list_by_transaction(
-            transaction_id
+            transaction_id,
         )
 
     def list_by_correlation_id(
             self,
             correlation_id: str,
-    ):
+    ) -> List[AuditEvent]:
         """
         Retrieve audit events associated with a request correlation ID.
         """
-
         return self.repository.list_by_correlation_id(
-            correlation_id
+            correlation_id,
         )

@@ -24,6 +24,9 @@ class PostgresCardRepository(CardRepositoryProtocol):
     get_for_update(), which acquires a PostgreSQL row-level lock. This is
     required to prevent concurrent authorization operations from reading
     and modifying the same card balance simultaneously.
+
+    The repository does not commit or rollback transactions. Transaction
+    boundaries remain under the control of the caller.
     """
 
     def __init__(
@@ -42,6 +45,8 @@ class PostgresCardRepository(CardRepositoryProtocol):
     ) -> None:
         """
         Persist a new card in PostgreSQL.
+
+        The caller owns the surrounding transaction and eventual commit.
         """
         card_db = self._to_db_model(card)
 
@@ -60,11 +65,16 @@ class PostgresCardRepository(CardRepositoryProtocol):
         Returns:
             The domain Card if found, otherwise None.
         """
-        statement = select(CardDB).where(
-            CardDB.id == card_id,
-            )
+        statement = (
+            select(CardDB)
+            .where(
+                CardDB.id == card_id,
+                )
+        )
 
-        card_db = self.db.execute(statement).scalar_one_or_none()
+        card_db = self.db.execute(
+            statement,
+        ).scalar_one_or_none()
 
         if card_db is None:
             return None
@@ -92,11 +102,15 @@ class PostgresCardRepository(CardRepositoryProtocol):
         """
         statement = (
             select(CardDB)
-            .where(CardDB.id == card_id)
+            .where(
+                CardDB.id == card_id,
+                )
             .with_for_update()
         )
 
-        card_db = self.db.execute(statement).scalar_one_or_none()
+        card_db = self.db.execute(
+            statement,
+        ).scalar_one_or_none()
 
         if card_db is None:
             return None
@@ -114,11 +128,16 @@ class PostgresCardRepository(CardRepositoryProtocol):
             ValueError:
                 If the card does not exist in PostgreSQL.
         """
-        statement = select(CardDB).where(
-            CardDB.id == card.card_id,
-            )
+        statement = (
+            select(CardDB)
+            .where(
+                CardDB.id == card.card_id,
+                )
+        )
 
-        card_db = self.db.execute(statement).scalar_one_or_none()
+        card_db = self.db.execute(
+            statement,
+        ).scalar_one_or_none()
 
         if card_db is None:
             raise ValueError(
@@ -128,7 +147,9 @@ class PostgresCardRepository(CardRepositoryProtocol):
         card_db.card_number = card.card_number
         card_db.cardholder_name = card.cardholder_name
         card_db.network = card.network.value
-        card_db.balance = Decimal(card.balance)
+        card_db.balance = Decimal(
+            str(card.balance),
+        )
         card_db.status = card.status.value
         card_db.expiry_date = card.expiry_date
 
@@ -147,12 +168,16 @@ class PostgresCardRepository(CardRepositoryProtocol):
         """
         statement = (
             select(CardDB.id)
-            .where(CardDB.card_number == card_number)
+            .where(
+                CardDB.card_number == card_number,
+                )
             .limit(1)
         )
 
         return (
-                self.db.execute(statement).scalar_one_or_none()
+                self.db.execute(
+                    statement,
+                ).scalar_one_or_none()
                 is not None
         )
 
@@ -166,13 +191,18 @@ class PostgresCardRepository(CardRepositoryProtocol):
     ) -> CardDB:
         """
         Convert a domain Card into a SQLAlchemy CardDB instance.
+
+        Monetary values are converted through strings before constructing
+        Decimal values to avoid introducing binary floating-point artifacts.
         """
         return CardDB(
             id=card.card_id,
             card_number=card.card_number,
             cardholder_name=card.cardholder_name,
             network=card.network.value,
-            balance=Decimal(card.balance),
+            balance=Decimal(
+                str(card.balance),
+            ),
             status=card.status.value,
             expiry_date=card.expiry_date,
             created_at=card.created_at,
@@ -187,8 +217,8 @@ class PostgresCardRepository(CardRepositoryProtocol):
         """
         return Card(
             card_id=card_db.id,
-            card_number=card_db.card_number,
             cardholder_name=card_db.cardholder_name,
+            card_number=card_db.card_number,
             network=card_db.network,
             balance=card_db.balance,
             status=card_db.status,

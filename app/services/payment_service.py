@@ -36,6 +36,10 @@ class PaymentService:
     Transaction lifecycle operations that mutate an existing transaction
     retrieve it through get_for_update() so PostgreSQL-backed repositories
     can serialize concurrent updates using row-level locking.
+
+    Database transaction boundaries are intentionally not owned by this
+    service. The caller is responsible for creating the database session
+    and committing or rolling back the complete operation.
     """
 
     def __init__(
@@ -103,17 +107,16 @@ class PaymentService:
             InvalidTransactionStateError:
                 If the card is not active.
         """
-
         card = self.card_repository.get_for_update(card_id)
 
         if not card:
             raise TransactionNotFoundError(
-                "Card not found"
+                "Card not found",
             )
 
         if card.status != CardStatus.ACTIVE:
             raise InvalidTransactionStateError(
-                "Card is not active"
+                "Card is not active",
             )
 
         transaction = Transaction(
@@ -139,6 +142,7 @@ class PaymentService:
             return transaction
 
         card.balance -= amount
+
         self.card_repository.update(card)
 
         transaction.history.append(
@@ -171,27 +175,28 @@ class PaymentService:
         PostgreSQL-backed repository can acquire a row-level lock before
         validating and modifying the transaction.
         """
-
-        transaction = self.repository.get_for_update(transaction_id)
+        transaction = self.repository.get_for_update(
+            transaction_id,
+        )
 
         if not transaction:
             raise TransactionNotFoundError(
-                "Transaction not found"
+                "Transaction not found",
             )
 
         if transaction.status != TransactionStatus.AUTHORIZED:
             raise InvalidTransactionStateError(
-                "Transaction is not in AUTHORIZED state"
+                "Transaction is not in AUTHORIZED state",
             )
 
         if capture_amount <= Decimal("0"):
             raise ValueError(
-                "Capture amount must be greater than zero"
+                "Capture amount must be greater than zero",
             )
 
         if capture_amount > transaction.authorized_amount:
             raise CaptureAmountExceededError(
-                "Capture amount exceeds authorized amount"
+                "Capture amount exceeds authorized amount",
             )
 
         self._validate_transition(
@@ -232,17 +237,18 @@ class PaymentService:
         PostgreSQL-backed repository can acquire a row-level lock before
         validating and modifying the transaction.
         """
-
-        transaction = self.repository.get_for_update(transaction_id)
+        transaction = self.repository.get_for_update(
+            transaction_id,
+        )
 
         if not transaction:
             raise TransactionNotFoundError(
-                "Transaction not found"
+                "Transaction not found",
             )
 
         if transaction.status != TransactionStatus.CAPTURED:
             raise InvalidTransactionStateError(
-                "Transaction is not in CAPTURED state"
+                "Transaction is not in CAPTURED state",
             )
 
         self._validate_transition(
@@ -291,12 +297,13 @@ class PaymentService:
             A tuple containing the updated transaction and the remaining
             refundable balance.
         """
-
-        transaction = self.repository.get_for_update(transaction_id)
+        transaction = self.repository.get_for_update(
+            transaction_id,
+        )
 
         if not transaction:
             raise TransactionNotFoundError(
-                "Transaction not found"
+                "Transaction not found",
             )
 
         if transaction.status not in (
@@ -304,12 +311,12 @@ class PaymentService:
                 TransactionStatus.PARTIALLY_REFUNDED,
         ):
             raise InvalidTransactionStateError(
-                "Transaction is not settled"
+                "Transaction is not settled",
             )
 
         if refund_amount <= Decimal("0"):
             raise ValueError(
-                "Refund amount must be greater than zero"
+                "Refund amount must be greater than zero",
             )
 
         remaining = (
@@ -319,7 +326,7 @@ class PaymentService:
 
         if refund_amount > remaining:
             raise RefundAmountExceededError(
-                "Refund amount exceeds remaining refundable balance"
+                "Refund amount exceeds remaining refundable balance",
             )
 
         remaining_after = remaining - refund_amount
@@ -368,7 +375,6 @@ class PaymentService:
         state-machine exception into the service-layer exception exposed
         to callers.
         """
-
         try:
             validate_transition(
                 current_status,
@@ -376,5 +382,5 @@ class PaymentService:
             )
         except InvalidTransactionTransition as exc:
             raise InvalidTransactionStateError(
-                expected_state
+                expected_state,
             ) from exc

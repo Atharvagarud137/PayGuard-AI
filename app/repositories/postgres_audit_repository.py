@@ -1,5 +1,3 @@
-import json
-from copy import deepcopy
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -32,9 +30,9 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
     ) -> None:
         self.db = db
 
-    # ------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Audit Operations
-    # ------------------------------------------------------------------
+    # -----------------------------------------------------------------------
 
     def add(
             self,
@@ -43,9 +41,12 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
         """
         Persist a new audit event.
 
-        The current PostgreSQL schema stores the audit event's additional
-        domain attributes inside metadata_json because the persistence
-        model intentionally keeps the core audit columns compact.
+        The current PostgreSQL schema stores richer domain attributes such
+        as action, outcome, card_id, merchant_id, amount, and detail inside
+        metadata_json while retaining the core audit fields as first-class
+        database columns.
+
+        The caller owns the surrounding transaction and eventual commit.
         """
         event_db = self._to_db_model(event)
 
@@ -64,10 +65,14 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
         """
         statement = (
             select(AuditEventDB)
-            .where(AuditEventDB.id == audit_event_id)
+            .where(
+                AuditEventDB.id == audit_event_id,
+                )
         )
 
-        event_db = self.db.execute(statement).scalar_one_or_none()
+        event_db = self.db.execute(
+            statement,
+        ).scalar_one_or_none()
 
         if event_db is None:
             return None
@@ -86,7 +91,11 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             )
         )
 
-        events_db = self.db.execute(statement).scalars().all()
+        events_db = (
+            self.db.execute(statement)
+            .scalars()
+            .all()
+        )
 
         return [
             self._to_domain_model(event_db)
@@ -113,7 +122,11 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             )
         )
 
-        events_db = self.db.execute(statement).scalars().all()
+        events_db = (
+            self.db.execute(statement)
+            .scalars()
+            .all()
+        )
 
         return [
             self._to_domain_model(event_db)
@@ -140,24 +153,35 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             )
         )
 
-        events_db = self.db.execute(statement).scalars().all()
+        events_db = (
+            self.db.execute(statement)
+            .scalars()
+            .all()
+        )
 
         return [
             self._to_domain_model(event_db)
             for event_db in events_db
         ]
 
-    # ------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Mapping Helpers
-    # ------------------------------------------------------------------
+    # -----------------------------------------------------------------------
 
     @staticmethod
-    def _event_type_to_string(event_type: Any) -> str:
+    def _event_type_to_string(
+            event_type: Any,
+    ) -> str:
         """
         Convert an enum-backed or string event type into its persisted
         string representation.
         """
-        value = getattr(event_type, "value", event_type)
+        value = getattr(
+            event_type,
+            "value",
+            event_type,
+        )
+
         return str(value)
 
     @staticmethod
@@ -169,7 +193,7 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
 
         The domain model contains richer audit information than the current
         database table exposes as first-class columns. Those additional
-        fields are therefore persisted in metadata_json.
+        fields are persisted in metadata_json.
         """
         metadata: Dict[str, Any] = {
             "action": event.action,
@@ -214,7 +238,7 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
         if amount is not None:
             amount = Decimal(str(amount))
 
-        event = AuditEvent(
+        return AuditEvent(
             audit_event_id=event_db.id,
             event_type=event_db.event_type,
             action=metadata.get("action", ""),
@@ -230,5 +254,3 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             ),
             timestamp=event_db.created_at,
         )
-
-        return deepcopy(event)

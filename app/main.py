@@ -3,10 +3,23 @@ import random
 import string
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.database_models import (
+    AuditEventDB,
+    CardDB,
+    IdempotencyRecordDB,
+    TransactionDB,
+    TransactionEventDB,
+)
 
 from app.domain.exceptions import (
     CaptureAmountExceededError,
@@ -24,15 +37,21 @@ from app.models import (
     RefundRequest,
 )
 
-from app.repositories.audit_repository import AuditRepository
-from app.repositories.card_repository import CardRepository
-from app.repositories.idempotency_repository import IdempotencyRepository
-from app.repositories.transaction_repository import TransactionRepository
+from app.repositories.postgres_audit_repository import (
+    PostgresAuditRepository,
+)
+from app.repositories.postgres_card_repository import (
+    PostgresCardRepository,
+)
+from app.repositories.postgres_idempotency_repository import (
+    PostgresIdempotencyRepository,
+)
+from app.repositories.postgres_transaction_repository import (
+    PostgresTransactionRepository,
+)
 
 from app.services.audit_service import AuditService
 from app.services.payment_service import PaymentService
-
-from app.storage import storage
 
 from app.routes.dashboard import router as dashboard_router
 
@@ -50,10 +69,6 @@ app = FastAPI(
 # ============================================================================
 # CORS Configuration
 # ============================================================================
-
-# The React dashboard runs on localhost:5173 while the FastAPI backend
-# runs on 127.0.0.1:8000. These are different browser origins, so the
-# backend explicitly allows the dashboard to make API requests.
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,33 +90,51 @@ app.include_router(dashboard_router)
 
 
 # ============================================================================
-# Repositories and Services
+# Database / Service Factory
 # ============================================================================
 
-transaction_repository = TransactionRepository(
-    storage
-)
+def get_payment_service(
+        db: Session = Depends(get_db),
+) -> PaymentService:
+    """
+    Construct a PaymentService using repositories backed by the current
+    request-scoped PostgreSQL session.
 
-card_repository = CardRepository(
-    storage
-)
+    The same SQLAlchemy session is shared by the card and transaction
+    repositories so payment operations can execute within one database
+    transaction.
+    """
+    transaction_repository = PostgresTransactionRepository(db)
+    card_repository = PostgresCardRepository(db)
 
-payment_service = PaymentService(
-    transaction_repository,
-    card_repository,
-)
+    return PaymentService(
+        repository=transaction_repository,
+        card_repository=card_repository,
+    )
 
-idempotency_repository = IdempotencyRepository(
-    storage
-)
 
-audit_repository = AuditRepository(
-    storage
-)
+def get_audit_service(
+        db: Session = Depends(get_db),
+) -> AuditService:
+    """
+    Construct an AuditService using the current request-scoped PostgreSQL
+    session.
+    """
+    audit_repository = PostgresAuditRepository(db)
 
-audit_service = AuditService(
-    audit_repository
-)
+    return AuditService(
+        audit_repository,
+    )
+
+
+def get_idempotency_repository(
+        db: Session = Depends(get_db),
+) -> PostgresIdempotencyRepository:
+    """
+    Construct the PostgreSQL idempotency repository using the current
+    request-scoped database session.
+    """
+    return PostgresIdempotencyRepository(db)
 
 
 # ============================================================================
@@ -109,22 +142,52 @@ audit_service = AuditService(
 # ============================================================================
 
 @app.post("/api/v1/test/reset")
-def reset_test_state():
+def reset_test_state(
+        db: Session = Depends(get_db),
+):
     """
-    Reset all in-memory application state.
+    Reset all PostgreSQL application state.
 
     This endpoint exists exclusively for local E2E test isolation.
 
     It clears:
-        - cards
-        - transactions
-        - audit events
         - idempotency records
+        - audit events
+        - transaction events
+        - transactions
+        - cards
+
+    Child records are deleted before parent records to satisfy foreign-key
+    constraints.
 
     Do not expose this endpoint in a production deployment.
     """
+    try:
+        db.execute(
+            delete(IdempotencyRecordDB)
+        )
 
-    storage.reset()
+        db.execute(
+            delete(AuditEventDB)
+        )
+
+        db.execute(
+            delete(TransactionEventDB)
+        )
+
+        db.execute(
+            delete(TransactionDB)
+        )
+
+        db.execute(
+            delete(CardDB)
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "message": "Test state reset successfully",
@@ -142,7 +205,6 @@ def generate_masked_card_number() -> str:
     Only the final four digits are exposed because this project simulates
     payment-domain behavior without handling real PAN data.
     """
-
     digits = "".join(
         random.choices(
             string.digits,
@@ -162,7 +224,6 @@ def get_correlation_id(
     Correlation IDs allow related operations to be traced across the
     application without exposing sensitive payment information.
     """
-
     if correlation_id:
         return correlation_id
 
@@ -181,7 +242,6 @@ def check_simulated_failure(
         NETWORK_ERROR
         INVALID_RESPONSE
     """
-
     if x_simulate_failure == "TIMEOUT":
         raise HTTPException(
             status_code=504,
@@ -211,13 +271,9 @@ def build_authorization_fingerprint(
     """
     Build a deterministic fingerprint for an authorization request.
 
-    The fingerprint represents the request fields that determine the
-    authorization operation.
-
-    Decimal values are converted to strings so the fingerprint does not
-    depend on floating-point representation.
+    Decimal values are normalized through their string representation so
+    the fingerprint does not depend on binary floating-point formatting.
     """
-
     normalized_request = (
         f"card_id={request.card_id}|"
         f"amount={request.amount}|"
@@ -232,6 +288,7 @@ def build_authorization_fingerprint(
 def validate_idempotency_key(
         idempotency_key: Optional[str],
         request: AuthorizeRequest,
+        idempotency_repository: PostgresIdempotencyRepository,
 ) -> Optional[dict]:
     """
     Validate and retrieve an existing authorization idempotency record.
@@ -244,7 +301,6 @@ def validate_idempotency_key(
             When the same idempotency key is reused for a different
             authorization request.
     """
-
     if not idempotency_key:
         return None
 
@@ -275,6 +331,7 @@ def store_idempotency_result(
         idempotency_key: Optional[str],
         request: AuthorizeRequest,
         response: dict,
+        idempotency_repository: PostgresIdempotencyRepository,
 ) -> None:
     """
     Store a completed authorization result for future replay.
@@ -282,7 +339,6 @@ def store_idempotency_result(
     Technical failures are raised before this function is called, so they
     are intentionally not stored as completed idempotent operations.
     """
-
     if not idempotency_key:
         return
 
@@ -307,11 +363,7 @@ def build_capture_fingerprint(
 ) -> str:
     """
     Build a deterministic fingerprint for a capture request.
-
-    The fingerprint represents the transaction and capture amount that
-    determine the capture operation.
     """
-
     normalized_request = (
         f"transaction_id={transaction_id}|"
         f"capture_amount={request.capture_amount}"
@@ -326,6 +378,7 @@ def validate_capture_idempotency_key(
         idempotency_key: Optional[str],
         transaction_id: str,
         request: CaptureRequest,
+        idempotency_repository: PostgresIdempotencyRepository,
 ) -> Optional[dict]:
     """
     Validate and retrieve an existing capture idempotency record.
@@ -338,7 +391,6 @@ def validate_capture_idempotency_key(
             When the same idempotency key is reused for a different
             capture request.
     """
-
     if not idempotency_key:
         return None
 
@@ -371,15 +423,11 @@ def store_capture_idempotency_result(
         transaction_id: str,
         request: CaptureRequest,
         response: dict,
+        idempotency_repository: PostgresIdempotencyRepository,
 ) -> None:
     """
     Store a completed capture result for future replay.
-
-    Technical and business failures are raised before this function is
-    called, so failed capture operations are not stored as completed
-    idempotent operations.
     """
-
     if not idempotency_key:
         return
 
@@ -409,16 +457,18 @@ def issue_card(
         x_simulate_failure: Optional[str] = Header(
             default=None,
         ),
+        db: Session = Depends(get_db),
 ):
     """
     Issue a new virtual card.
 
-    Card persistence is delegated to the CardRepository.
+    Card persistence is delegated to the PostgreSQL card repository.
     """
-
     check_simulated_failure(
         x_simulate_failure
     )
+
+    card_repository = PostgresCardRepository(db)
 
     card_number = generate_masked_card_number()
 
@@ -435,9 +485,17 @@ def issue_card(
         expiry_date=request.expiry_date,
     )
 
-    card_repository.add(
-        card
-    )
+    try:
+        card_repository.add(card)
+        db.commit()
+
+    except IntegrityError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Card could not be created because of a data conflict",
+        ) from exc
 
     return card
 
@@ -462,50 +520,41 @@ def authorize_transaction(
             default=None,
             alias="X-Correlation-ID",
         ),
+        db: Session = Depends(get_db),
 ):
     """
     Authorize a payment against an active card.
 
-    The PaymentService owns authorization business logic, including:
-
-        - Card lookup
-        - Card status validation
-        - Insufficient-funds decisions
-        - Balance deduction
-        - Transaction creation
+    The PaymentService owns authorization business logic.
 
     The API layer is responsible for:
-
         - HTTP request handling
         - Idempotency
         - Correlation IDs
         - Audit recording
         - HTTP error translation
-
-    Idempotency behavior:
-
-        - A new Idempotency-Key processes the authorization normally.
-        - Reusing the same key with the same request replays the original
-          response.
-        - Reusing the same key with a different request returns HTTP 409.
-        - Omitting the key preserves the existing non-idempotent behavior.
-
-    Audit behavior:
-
-        - Successful authorization creates an audit event.
-        - Declined authorization creates an audit event.
-        - Business validation failures create an audit event.
-        - Idempotent replay does not create another payment operation.
-
-    Technical failures are evaluated before idempotency processing.
+        - Database transaction boundaries
     """
-
     correlation_id = get_correlation_id(
         correlation_id
     )
 
     check_simulated_failure(
         x_simulate_failure
+    )
+
+    transaction_repository = PostgresTransactionRepository(db)
+    card_repository = PostgresCardRepository(db)
+    idempotency_repository = PostgresIdempotencyRepository(db)
+    audit_repository = PostgresAuditRepository(db)
+
+    payment_service = PaymentService(
+        transaction_repository,
+        card_repository,
+    )
+
+    audit_service = AuditService(
+        audit_repository
     )
 
     # ------------------------------------------------------------------------
@@ -515,9 +564,11 @@ def authorize_transaction(
     existing_response = validate_idempotency_key(
         idempotency_key=idempotency_key,
         request=request,
+        idempotency_repository=idempotency_repository,
     )
 
     if existing_response is not None:
+        db.rollback()
         return existing_response
 
     # ------------------------------------------------------------------------
@@ -527,7 +578,7 @@ def authorize_transaction(
     try:
         transaction = payment_service.authorize(
             card_id=request.card_id,
-            amount=request.amount,
+            amount=Decimal(str(request.amount)),
             merchant_id=request.merchant_id,
         )
 
@@ -542,6 +593,8 @@ def authorize_transaction(
             amount=request.amount,
             detail=str(exc),
         )
+
+        db.commit()
 
         raise HTTPException(
             status_code=404,
@@ -559,6 +612,8 @@ def authorize_transaction(
             amount=request.amount,
             detail=str(exc),
         )
+
+        db.commit()
 
         raise HTTPException(
             status_code=400,
@@ -592,7 +647,10 @@ def authorize_transaction(
             idempotency_key=idempotency_key,
             request=request,
             response=response,
+            idempotency_repository=idempotency_repository,
         )
+
+        db.commit()
 
         return response
 
@@ -622,7 +680,10 @@ def authorize_transaction(
         idempotency_key=idempotency_key,
         request=request,
         response=response,
+        idempotency_repository=idempotency_repository,
     )
+
+    db.commit()
 
     return response
 
@@ -648,26 +709,30 @@ def capture_transaction(
             default=None,
             alias="X-Correlation-ID",
         ),
+        db: Session = Depends(get_db),
 ):
     """
     Capture an authorized transaction.
-
-    Idempotency behavior:
-
-        - A new Idempotency-Key processes the capture normally.
-        - Reusing the same key with the same transaction and amount
-          replays the original response.
-        - Reusing the same key with a different capture request returns
-          HTTP 409.
-        - Omitting the key preserves the existing non-idempotent behavior.
     """
-
     correlation_id = get_correlation_id(
         correlation_id
     )
 
     check_simulated_failure(
         x_simulate_failure
+    )
+
+    transaction_repository = PostgresTransactionRepository(db)
+    idempotency_repository = PostgresIdempotencyRepository(db)
+    audit_repository = PostgresAuditRepository(db)
+
+    payment_service = PaymentService(
+        transaction_repository,
+        PostgresCardRepository(db),
+    )
+
+    audit_service = AuditService(
+        audit_repository
     )
 
     # ------------------------------------------------------------------------
@@ -678,9 +743,11 @@ def capture_transaction(
         idempotency_key=idempotency_key,
         transaction_id=transaction_id,
         request=request,
+        idempotency_repository=idempotency_repository,
     )
 
     if existing_response is not None:
+        db.rollback()
         return existing_response
 
     # ------------------------------------------------------------------------
@@ -690,7 +757,9 @@ def capture_transaction(
     try:
         transaction = payment_service.capture(
             transaction_id=transaction_id,
-            capture_amount=request.capture_amount,
+            capture_amount=Decimal(
+                str(request.capture_amount)
+            ),
         )
 
     except TransactionNotFoundError as exc:
@@ -703,6 +772,8 @@ def capture_transaction(
             amount=request.capture_amount,
             detail=str(exc),
         )
+
+        db.commit()
 
         raise HTTPException(
             status_code=404,
@@ -720,6 +791,8 @@ def capture_transaction(
             detail=str(exc),
         )
 
+        db.commit()
+
         raise HTTPException(
             status_code=400,
             detail=str(exc),
@@ -736,24 +809,18 @@ def capture_transaction(
             detail=str(exc),
         )
 
+        db.commit()
+
         raise HTTPException(
             status_code=409,
             detail=str(exc),
         ) from exc
-
-    # ------------------------------------------------------------------------
-    # API Response
-    # ------------------------------------------------------------------------
 
     response = {
         "transaction_id": transaction.transaction_id,
         "status": transaction.status,
         "captured_amount": transaction.captured_amount,
     }
-
-    # ------------------------------------------------------------------------
-    # Audit
-    # ------------------------------------------------------------------------
 
     audit_service.record(
         event_type=AuditEventType.CAPTURE,
@@ -767,16 +834,15 @@ def capture_transaction(
         detail="Capture successful",
     )
 
-    # ------------------------------------------------------------------------
-    # Store Idempotency Result
-    # ------------------------------------------------------------------------
-
     store_capture_idempotency_result(
         idempotency_key=idempotency_key,
         transaction_id=transaction_id,
         request=request,
         response=response,
+        idempotency_repository=idempotency_repository,
     )
+
+    db.commit()
 
     return response
 
@@ -797,17 +863,26 @@ def settle_transaction(
             default=None,
             alias="X-Correlation-ID",
         ),
+        db: Session = Depends(get_db),
 ):
     """
     Settle a captured transaction.
     """
-
     correlation_id = get_correlation_id(
         correlation_id
     )
 
     check_simulated_failure(
         x_simulate_failure
+    )
+
+    payment_service = PaymentService(
+        PostgresTransactionRepository(db),
+        PostgresCardRepository(db),
+    )
+
+    audit_service = AuditService(
+        PostgresAuditRepository(db)
     )
 
     try:
@@ -825,6 +900,8 @@ def settle_transaction(
             detail=str(exc),
         )
 
+        db.commit()
+
         raise HTTPException(
             status_code=404,
             detail=str(exc),
@@ -840,14 +917,12 @@ def settle_transaction(
             detail=str(exc),
         )
 
+        db.commit()
+
         raise HTTPException(
             status_code=409,
             detail=str(exc),
         ) from exc
-
-    # ------------------------------------------------------------------------
-    # Audit
-    # ------------------------------------------------------------------------
 
     audit_service.record(
         event_type=AuditEventType.SETTLEMENT,
@@ -860,6 +935,8 @@ def settle_transaction(
         amount=transaction.settled_amount,
         detail="Settlement successful",
     )
+
+    db.commit()
 
     return {
         "transaction_id": transaction.transaction_id,
@@ -885,11 +962,11 @@ def refund_transaction(
             default=None,
             alias="X-Correlation-ID",
         ),
+        db: Session = Depends(get_db),
 ):
     """
     Refund a settled transaction either partially or completely.
     """
-
     correlation_id = get_correlation_id(
         correlation_id
     )
@@ -898,10 +975,21 @@ def refund_transaction(
         x_simulate_failure
     )
 
+    payment_service = PaymentService(
+        PostgresTransactionRepository(db),
+        PostgresCardRepository(db),
+    )
+
+    audit_service = AuditService(
+        PostgresAuditRepository(db)
+    )
+
     try:
         transaction, remaining_after = payment_service.refund(
             transaction_id=transaction_id,
-            refund_amount=request.refund_amount,
+            refund_amount=Decimal(
+                str(request.refund_amount)
+            ),
         )
 
     except TransactionNotFoundError as exc:
@@ -914,6 +1002,8 @@ def refund_transaction(
             amount=request.refund_amount,
             detail=str(exc),
         )
+
+        db.commit()
 
         raise HTTPException(
             status_code=404,
@@ -931,6 +1021,8 @@ def refund_transaction(
             detail=str(exc),
         )
 
+        db.commit()
+
         raise HTTPException(
             status_code=400,
             detail=str(exc),
@@ -947,14 +1039,12 @@ def refund_transaction(
             detail=str(exc),
         )
 
+        db.commit()
+
         raise HTTPException(
             status_code=409,
             detail=str(exc),
         ) from exc
-
-    # ------------------------------------------------------------------------
-    # API Response
-    # ------------------------------------------------------------------------
 
     response = {
         "transaction_id": transaction.transaction_id,
@@ -962,10 +1052,6 @@ def refund_transaction(
         "status": transaction.status,
         "remaining_balance": remaining_after,
     }
-
-    # ------------------------------------------------------------------------
-    # Audit
-    # ------------------------------------------------------------------------
 
     audit_service.record(
         event_type=AuditEventType.REFUND,
@@ -979,6 +1065,8 @@ def refund_transaction(
         detail="Refund successful",
     )
 
+    db.commit()
+
     return response
 
 
@@ -991,11 +1079,13 @@ def refund_transaction(
 )
 def get_transaction(
         transaction_id: str,
+        payment_service: PaymentService = Depends(
+            get_payment_service,
+        ),
 ):
     """
     Retrieve a transaction by its unique identifier.
     """
-
     transaction = payment_service.get_transaction(
         transaction_id
     )
@@ -1018,6 +1108,12 @@ def get_transaction(
 )
 def get_transaction_audit_events(
         transaction_id: str,
+        payment_service: PaymentService = Depends(
+            get_payment_service,
+        ),
+        audit_service: AuditService = Depends(
+            get_audit_service,
+        ),
 ):
     """
     Retrieve the audit trail associated with a transaction.
@@ -1026,7 +1122,6 @@ def get_transaction_audit_events(
     expose raw card numbers, authentication credentials, or request
     payloads.
     """
-
     transaction = payment_service.get_transaction(
         transaction_id
     )
@@ -1047,11 +1142,13 @@ def get_transaction_audit_events(
 )
 def get_correlation_audit_events(
         correlation_id: str,
+        audit_service: AuditService = Depends(
+            get_audit_service,
+        ),
 ):
     """
     Retrieve audit events associated with a correlation ID.
     """
-
     return audit_service.list_by_correlation_id(
         correlation_id
     )
@@ -1066,7 +1163,6 @@ def root():
     """
     Basic application health endpoint.
     """
-
     return {
-        "message": "PayGuard AI Mock Payment Gateway is running"
+        "message": "PayGuard AI Mock Payment Gateway is running",
     }
