@@ -1,0 +1,81 @@
+
+name: PayGuard-AI CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: payguard-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: payguard_test
+          POSTGRES_USER: payguard
+          POSTGRES_PASSWORD: payguard_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U payguard -d payguard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://payguard:payguard_test_password@localhost:5432/payguard_test
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate Python syntax
+        run: |
+          python -m compileall -q app tests
+
+      - name: Validate Alembic migration configuration
+        run: |
+          alembic heads
+          alembic history
+
+      - name: Apply database migrations
+        run: |
+          alembic upgrade head
+
+      - name: Run test suite
+        run: |
+          pytest -v --tb=short

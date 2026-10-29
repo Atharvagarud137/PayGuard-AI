@@ -1,34 +1,27 @@
+
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
 import uuid
 
-from pydantic import (
-    BaseModel,
-    Field,
-    field_serializer,
-    field_validator,
-)
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 # ============================================================================
 # Money Validation
 # ============================================================================
 
-def validate_money_amount(
-        value: Decimal,
-) -> Decimal:
+def validate_money_amount(value: Decimal) -> Decimal:
     """
     Validate a monetary amount.
 
-    Payment amounts must:
-        - remain Decimal values internally
-        - contain no more than two decimal places
-
-    Decimal is deliberately used instead of float to avoid precision
-    problems in financial calculations.
+    Monetary values must be finite and have no more than two decimal places.
+    Decimal is used internally to avoid binary floating-point arithmetic
+    errors in payment calculations.
     """
+    if not value.is_finite():
+        raise ValueError("Monetary amounts must be finite")
 
     if value.as_tuple().exponent < -2:
         raise ValueError(
@@ -72,12 +65,7 @@ class TransactionStatus(str, Enum):
 # ============================================================================
 
 class AuditEventType(str, Enum):
-    """
-    Categories of security and payment-domain audit events.
-
-    These values are intentionally explicit so audit records can later
-    be queried, filtered, aggregated, and consumed by the AI RCA layer.
-    """
+    """Categories of payment-domain and security audit events."""
 
     AUTHORIZATION = "AUTHORIZATION"
     CAPTURE = "CAPTURE"
@@ -95,17 +83,15 @@ class CardCreateRequest(BaseModel):
     network: CardNetwork
 
     initial_balance: Decimal = Field(
-        gt=Decimal("0")
+        gt=Decimal("0"),
+        allow_inf_nan=False,
     )
 
     expiry_date: str
 
     @field_validator("initial_balance")
     @classmethod
-    def validate_initial_balance(
-            cls,
-            value: Decimal,
-    ) -> Decimal:
+    def validate_initial_balance(cls, value: Decimal) -> Decimal:
         return validate_money_amount(value)
 
 
@@ -116,12 +102,16 @@ class Card(BaseModel):
 
     cardholder_name: str
 
-    # The application stores only a masked representation.
+    # The application stores a masked representation, not a real PAN.
     card_number: str
 
     network: CardNetwork
 
-    balance: Decimal = Decimal("0.00")
+    balance: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0"),
+        allow_inf_nan=False,
+    )
 
     status: CardStatus = CardStatus.ACTIVE
 
@@ -133,24 +123,21 @@ class Card(BaseModel):
 
     @field_validator("balance")
     @classmethod
-    def validate_balance(
-            cls,
-            value: Decimal,
-    ) -> Decimal:
-        return validate_money_amount(value)
+    def validate_balance(cls, value: Decimal) -> Decimal:
+        value = validate_money_amount(value)
+
+        if value < Decimal("0"):
+            raise ValueError("Card balance cannot be negative")
+
+        return value
 
     @field_serializer("balance")
-    def serialize_balance(
-            self,
-            value: Decimal,
-    ) -> float:
+    def serialize_balance(self, value: Decimal) -> float:
         """
-        Serialize Decimal as a JSON number at the API boundary.
+        Serialize Decimal as a JSON number for API compatibility.
 
-        Decimal remains the internal representation used for monetary
-        calculations.
+        Internal calculations and persistence continue to use Decimal.
         """
-
         return float(value)
 
 
@@ -160,47 +147,39 @@ class Card(BaseModel):
 
 class AuthorizeRequest(BaseModel):
     card_id: str
-
     amount: Decimal = Field(
-        gt=Decimal("0")
+        gt=Decimal("0"),
+        allow_inf_nan=False,
     )
-
     merchant_id: str
 
     @field_validator("amount")
     @classmethod
-    def validate_amount(
-            cls,
-            value: Decimal,
-    ) -> Decimal:
+    def validate_amount(cls, value: Decimal) -> Decimal:
         return validate_money_amount(value)
 
 
 class CaptureRequest(BaseModel):
     capture_amount: Decimal = Field(
-        gt=Decimal("0")
+        gt=Decimal("0"),
+        allow_inf_nan=False,
     )
 
     @field_validator("capture_amount")
     @classmethod
-    def validate_capture_amount(
-            cls,
-            value: Decimal,
-    ) -> Decimal:
+    def validate_capture_amount(cls, value: Decimal) -> Decimal:
         return validate_money_amount(value)
 
 
 class RefundRequest(BaseModel):
     refund_amount: Decimal = Field(
-        gt=Decimal("0")
+        gt=Decimal("0"),
+        allow_inf_nan=False,
     )
 
     @field_validator("refund_amount")
     @classmethod
-    def validate_refund_amount(
-            cls,
-            value: Decimal,
-    ) -> Decimal:
+    def validate_refund_amount(cls, value: Decimal) -> Decimal:
         return validate_money_amount(value)
 
 
@@ -231,13 +210,29 @@ class Transaction(BaseModel):
 
     merchant_id: Optional[str] = None
 
-    authorized_amount: Decimal = Decimal("0.00")
+    authorized_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0"),
+        allow_inf_nan=False,
+    )
 
-    captured_amount: Decimal = Decimal("0.00")
+    captured_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0"),
+        allow_inf_nan=False,
+    )
 
-    settled_amount: Decimal = Decimal("0.00")
+    settled_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0"),
+        allow_inf_nan=False,
+    )
 
-    refunded_amount: Decimal = Decimal("0.00")
+    refunded_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0"),
+        allow_inf_nan=False,
+    )
 
     status: TransactionStatus
 
@@ -258,10 +253,10 @@ class Transaction(BaseModel):
         "refunded_amount",
     )
     @classmethod
-    def validate_transaction_amount(
-            cls,
-            value: Decimal,
-    ) -> Decimal:
+    def validate_transaction_amount(cls, value: Decimal) -> Decimal:
+        if value < Decimal("0"):
+            raise ValueError("Transaction amounts cannot be negative")
+
         return validate_money_amount(value)
 
     @field_serializer(
@@ -270,16 +265,8 @@ class Transaction(BaseModel):
         "settled_amount",
         "refunded_amount",
     )
-    def serialize_amounts(
-            self,
-            value: Decimal,
-    ) -> float:
-        """
-        Serialize Decimal monetary values as JSON numbers.
-
-        Internal calculations continue to use Decimal.
-        """
-
+    def serialize_amounts(self, value: Decimal) -> float:
+        """Serialize monetary values as JSON numbers at the API boundary."""
         return float(value)
 
 
@@ -323,6 +310,9 @@ class AuditEvent(BaseModel):
         if value is None:
             return None
 
+        if value < Decimal("0"):
+            raise ValueError("Audit monetary amounts cannot be negative")
+
         return validate_money_amount(value)
 
     @field_serializer("amount")
@@ -330,10 +320,7 @@ class AuditEvent(BaseModel):
             self,
             value: Optional[Decimal],
     ) -> Optional[float]:
-        """
-        Serialize audit monetary values at the API boundary.
-        """
-
+        """Serialize audit monetary values at the API boundary."""
         if value is None:
             return None
 

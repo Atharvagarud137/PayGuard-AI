@@ -1,3 +1,4 @@
+
 import json
 from typing import Any, Dict, Optional
 from uuid import uuid4
@@ -14,66 +15,58 @@ class PostgresIdempotencyRepository(IdempotencyRepositoryProtocol):
     """
     PostgreSQL-backed implementation of the idempotency repository.
 
-    Idempotency records are persisted independently of the payment domain
-    models so previously completed requests can be recognized across
-    application instances and process restarts.
+    Records allow completed requests to be recognized across application
+    instances and process restarts.
 
-    The repository does not commit or rollback transactions. Transaction
-    boundaries remain under the control of the caller.
+    The repository does not commit or roll back transactions. The caller
+    owns transaction boundaries.
 
-    PostgreSQL's unique constraint on idempotency_key provides the
-    persistence-level uniqueness guarantee. Inserts use ON CONFLICT DO
-    NOTHING so concurrent requests using the same key do not result in an
-    unhandled duplicate-key exception.
+    A unique database constraint protects idempotency keys from duplicate
+    inserts. A matching fingerprint represents the same request; a
+    different fingerprint represents conflicting key reuse.
 
-    A matching fingerprint indicates reuse of the same request. A different
-    fingerprint indicates an invalid attempt to reuse an idempotency key
-    for a different request.
-
-    The repository-level uniqueness guarantee does not by itself prevent
-    duplicate business operations. Atomic request claiming and lifecycle
-    handling must be enforced by the application/service transaction.
+    Database uniqueness alone does not guarantee exactly-once business
+    execution. The application must coordinate idempotency records and
+    payment operations within appropriate transaction boundaries.
     """
 
-    def __init__(
-            self,
-            db: Session,
-    ) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
-
-    # -----------------------------------------------------------------------
-    # Idempotency Operations
-    # -----------------------------------------------------------------------
 
     def get(
             self,
             idempotency_key: str,
     ) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve an idempotency record by key.
-
-        Returns:
-            A dictionary containing the key, request fingerprint, and
-            previously stored response when found. Otherwise, None.
-        """
+        """Retrieve an idempotency record by key."""
         statement = (
             select(IdempotencyRecordDB)
             .where(
-                IdempotencyRecordDB.idempotency_key == idempotency_key,
-                )
+                IdempotencyRecordDB.idempotency_key == idempotency_key
+            )
         )
-
         record_db = self.db.execute(
-            statement,
+            statement
         ).scalar_one_or_none()
 
         if record_db is None:
             return None
 
+        try:
+            response = json.loads(record_db.response_json)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise RuntimeError(
+                "Stored idempotency response contains invalid JSON."
+            ) from exc
+
+        if not isinstance(response, dict):
+            raise RuntimeError(
+                "Stored idempotency response must be a JSON object."
+            )
+
         return {
             "idempotency_key": record_db.idempotency_key,
             "fingerprint": record_db.fingerprint,
-            "response": json.loads(record_db.response_json),
+            "response": response,
         }
 
     def add(
@@ -83,28 +76,35 @@ class PostgresIdempotencyRepository(IdempotencyRepositoryProtocol):
             response: Dict[str, Any],
     ) -> None:
         """
-        Persist a completed idempotent operation.
+        Persist an idempotency record without committing the transaction.
 
-        The insert is protected by the database-level unique constraint on
-        idempotency_key.
+        If the key already exists, the existing fingerprint is checked.
+        A conflicting fingerprint raises ValueError.
 
-        When another concurrent transaction has already inserted the same
-        key, ON CONFLICT DO NOTHING prevents a duplicate-key exception.
-
-        The existing record is then inspected:
-
-        - Same fingerprint: the request represents the same operation.
-        - Different fingerprint: the key is being reused for a different
-          request and is rejected.
-
-        The repository does not commit the transaction.
+        For a matching fingerprint, the existing record is left unchanged.
+        The caller remains responsible for returning the previously stored
+        response rather than executing the business operation again.
         """
-        response_json = json.dumps(
-            response,
-            separators=(",", ":"),
-            sort_keys=True,
-            default=str,
-        )
+        if not idempotency_key or not idempotency_key.strip():
+            raise ValueError("Idempotency key must not be empty.")
+
+        if not fingerprint or not fingerprint.strip():
+            raise ValueError("Request fingerprint must not be empty.")
+
+        if not isinstance(response, dict):
+            raise ValueError("Idempotency response must be a dictionary.")
+
+        try:
+            response_json = json.dumps(
+                response,
+                separators=(",", ":"),
+                sort_keys=True,
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "Idempotency response must be JSON serializable."
+            ) from exc
 
         statement = (
             insert(IdempotencyRecordDB)
@@ -130,25 +130,25 @@ class PostgresIdempotencyRepository(IdempotencyRepositoryProtocol):
         existing_statement = (
             select(IdempotencyRecordDB)
             .where(
-                IdempotencyRecordDB.idempotency_key == idempotency_key,
-                )
+                IdempotencyRecordDB.idempotency_key == idempotency_key
+            )
+            .with_for_update()
         )
-
-        existing_record = (
-            self.db.execute(existing_statement)
-            .scalar_one_or_none()
-        )
+        existing_record = self.db.execute(
+            existing_statement
+        ).scalar_one_or_none()
 
         if existing_record is None:
             raise RuntimeError(
-                "Idempotency record conflict occurred, but the existing "
-                "record could not be retrieved.",
+                "An idempotency conflict occurred, but the existing "
+                "record could not be retrieved."
             )
 
         if existing_record.fingerprint != fingerprint:
             raise ValueError(
                 "Idempotency-Key has already been used for a different "
-                "request.",
+                "request."
             )
 
-        self.db.flush()
+        # A matching key and fingerprint must not overwrite the original
+        # response. The caller must retrieve and replay that response.

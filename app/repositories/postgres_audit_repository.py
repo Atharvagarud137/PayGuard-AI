@@ -1,3 +1,4 @@
+
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -13,65 +14,34 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
     """
     PostgreSQL-backed implementation of the audit repository.
 
-    The domain AuditEvent model remains independent from the SQLAlchemy
-    persistence model. This repository is responsible for translating
-    between the two representations.
+    Translates between the domain AuditEvent model and its SQLAlchemy
+    persistence representation.
 
-    Audit records are append-only. Existing audit events are never updated
-    or deleted through this repository.
+    Additional domain fields are stored in metadata_json when they do not
+    have dedicated database columns.
 
-    The repository does not commit or rollback transactions. Transaction
-    boundaries remain under the control of the caller.
+    Audit events are append-only through this repository. The repository
+    does not commit or roll back transactions; the caller owns transaction
+    boundaries.
     """
 
-    def __init__(
-            self,
-            db: Session,
-    ) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
 
-    # -----------------------------------------------------------------------
-    # Audit Operations
-    # -----------------------------------------------------------------------
-
-    def add(
-            self,
-            event: AuditEvent,
-    ) -> None:
-        """
-        Persist a new audit event.
-
-        The current PostgreSQL schema stores richer domain attributes such
-        as action, outcome, card_id, merchant_id, amount, and detail inside
-        metadata_json while retaining the core audit fields as first-class
-        database columns.
-
-        The caller owns the surrounding transaction and eventual commit.
-        """
+    def add(self, event: AuditEvent) -> None:
+        """Persist a new audit event within the caller's transaction."""
         event_db = self._to_db_model(event)
-
         self.db.add(event_db)
         self.db.flush()
 
-    def get(
-            self,
-            audit_event_id: str,
-    ) -> Optional[AuditEvent]:
-        """
-        Retrieve an audit event by its unique identifier.
-
-        Returns:
-            The domain AuditEvent if found, otherwise None.
-        """
+    def get(self, audit_event_id: str) -> Optional[AuditEvent]:
+        """Retrieve an audit event by its unique identifier."""
         statement = (
             select(AuditEventDB)
-            .where(
-                AuditEventDB.id == audit_event_id,
-                )
+            .where(AuditEventDB.id == audit_event_id)
         )
-
         event_db = self.db.execute(
-            statement,
+            statement
         ).scalar_one_or_none()
 
         if event_db is None:
@@ -80,22 +50,12 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
         return self._to_domain_model(event_db)
 
     def list_all(self) -> List[AuditEvent]:
-        """
-        Retrieve all audit events ordered chronologically.
-        """
-        statement = (
-            select(AuditEventDB)
-            .order_by(
-                AuditEventDB.created_at.asc(),
-                AuditEventDB.id.asc(),
-            )
+        """Retrieve all audit events in chronological order."""
+        statement = select(AuditEventDB).order_by(
+            AuditEventDB.created_at.asc(),
+            AuditEventDB.id.asc(),
         )
-
-        events_db = (
-            self.db.execute(statement)
-            .scalars()
-            .all()
-        )
+        events_db = self.db.execute(statement).scalars().all()
 
         return [
             self._to_domain_model(event_db)
@@ -106,27 +66,16 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             self,
             transaction_id: str,
     ) -> List[AuditEvent]:
-        """
-        Retrieve all audit events associated with a transaction.
-
-        Results are returned in chronological order.
-        """
+        """Retrieve audit events associated with a transaction."""
         statement = (
             select(AuditEventDB)
-            .where(
-                AuditEventDB.transaction_id == transaction_id,
-                )
+            .where(AuditEventDB.transaction_id == transaction_id)
             .order_by(
                 AuditEventDB.created_at.asc(),
                 AuditEventDB.id.asc(),
             )
         )
-
-        events_db = (
-            self.db.execute(statement)
-            .scalars()
-            .all()
-        )
+        events_db = self.db.execute(statement).scalars().all()
 
         return [
             self._to_domain_model(event_db)
@@ -137,63 +86,35 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             self,
             correlation_id: str,
     ) -> List[AuditEvent]:
-        """
-        Retrieve all audit events associated with a correlation ID.
-
-        Results are returned in chronological order.
-        """
+        """Retrieve audit events associated with a correlation ID."""
         statement = (
             select(AuditEventDB)
-            .where(
-                AuditEventDB.correlation_id == correlation_id,
-                )
+            .where(AuditEventDB.correlation_id == correlation_id)
             .order_by(
                 AuditEventDB.created_at.asc(),
                 AuditEventDB.id.asc(),
             )
         )
-
-        events_db = (
-            self.db.execute(statement)
-            .scalars()
-            .all()
-        )
+        events_db = self.db.execute(statement).scalars().all()
 
         return [
             self._to_domain_model(event_db)
             for event_db in events_db
         ]
 
-    # -----------------------------------------------------------------------
-    # Mapping Helpers
-    # -----------------------------------------------------------------------
-
     @staticmethod
-    def _event_type_to_string(
-            event_type: Any,
-    ) -> str:
-        """
-        Convert an enum-backed or string event type into its persisted
-        string representation.
-        """
-        value = getattr(
-            event_type,
-            "value",
-            event_type,
-        )
-
+    def _event_type_to_string(event_type: Any) -> str:
+        """Convert an enum or string event type into its string value."""
+        value = getattr(event_type, "value", event_type)
         return str(value)
 
     @staticmethod
-    def _to_db_model(
-            event: AuditEvent,
-    ) -> AuditEventDB:
+    def _to_db_model(event: AuditEvent) -> AuditEventDB:
         """
-        Convert a domain AuditEvent into the SQLAlchemy persistence model.
+        Convert a domain audit event into its persistence representation.
 
-        The domain model contains richer audit information than the current
-        database table exposes as first-class columns. Those additional
-        fields are persisted in metadata_json.
+        Monetary amounts are stored as strings in JSON metadata to preserve
+        their decimal representation.
         """
         metadata: Dict[str, Any] = {
             "action": event.action,
@@ -212,31 +133,25 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             id=event.audit_event_id,
             transaction_id=event.transaction_id,
             event_type=PostgresAuditRepository._event_type_to_string(
-                event.event_type,
+                event.event_type
             ),
-            message=event.detail,
-            correlation_id=event.correlation_id,
+            message=event.detail or event.action,
+            correlation_id=event.correlation_id or "unknown",
             metadata_json=metadata,
             created_at=event.timestamp,
         )
 
     @staticmethod
-    def _to_domain_model(
-            event_db: AuditEventDB,
-    ) -> AuditEvent:
-        """
-        Convert a SQLAlchemy AuditEventDB instance into the domain
-        AuditEvent model.
-
-        Fields stored in metadata_json are restored to their corresponding
-        domain attributes.
-        """
+    def _to_domain_model(event_db: AuditEventDB) -> AuditEvent:
+        """Restore a domain audit event from its persisted representation."""
         metadata = event_db.metadata_json or {}
 
-        amount = metadata.get("amount")
-
-        if amount is not None:
-            amount = Decimal(str(amount))
+        amount_value = metadata.get("amount")
+        amount = (
+            Decimal(str(amount_value))
+            if amount_value is not None
+            else None
+        )
 
         return AuditEvent(
             audit_event_id=event_db.id,
@@ -248,9 +163,6 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
             card_id=metadata.get("card_id"),
             merchant_id=metadata.get("merchant_id"),
             amount=amount,
-            detail=metadata.get(
-                "detail",
-                event_db.message,
-            ),
+            detail=metadata.get("detail", event_db.message),
             timestamp=event_db.created_at,
         )

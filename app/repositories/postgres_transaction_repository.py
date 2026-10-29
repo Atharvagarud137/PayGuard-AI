@@ -1,5 +1,7 @@
+
 from decimal import Decimal
 from typing import Optional
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,41 +15,22 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
     """
     PostgreSQL-backed implementation of the transaction repository.
 
-    This repository translates between the domain models in app.models and
-    the SQLAlchemy persistence models in app.database_models.
+    Translates between domain models and SQLAlchemy persistence models.
+    Transaction lifecycle rules remain in the service/domain layers.
 
-    Transaction lifecycle rules remain in the service/domain layer.
-    This repository is responsible for persistence, retrieval, and mapping.
-
-    The repository does not commit or rollback transactions. Transaction
-    boundaries are owned by the caller so that a complete payment operation
-    can execute atomically within a single database transaction.
+    The repository does not commit or roll back transactions. The caller
+    owns transaction boundaries so a payment operation can execute
+    atomically within a single database transaction.
 
     Lifecycle operations that perform read-modify-write transitions should
-    use get_for_update() so PostgreSQL can serialize concurrent updates to
-    the same transaction row.
+    use get_for_update() to serialize concurrent updates to the same row.
     """
 
-    def __init__(
-            self,
-            db: Session,
-    ) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
 
-    # -----------------------------------------------------------------------
-    # Transaction Operations
-    # -----------------------------------------------------------------------
-
-    def add(
-            self,
-            transaction: Transaction,
-    ) -> None:
-        """
-        Persist a new transaction and its lifecycle history.
-
-        The transaction and all supplied lifecycle events are added to the
-        current SQLAlchemy session. The caller owns the eventual commit.
-        """
+    def add(self, transaction: Transaction) -> None:
+        """Persist a transaction and its initial lifecycle history."""
         transaction_db = self._to_db_model(transaction)
 
         self.db.add(transaction_db)
@@ -63,87 +46,82 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
 
         self.db.flush()
 
-    def get(
-            self,
-            transaction_id: str,
-    ) -> Optional[Transaction]:
-        """
-        Retrieve a transaction by its unique identifier.
-
-        This operation does not acquire a row-level lock.
-
-        Returns:
-            The domain Transaction if found, otherwise None.
-        """
+    def get(self, transaction_id: str) -> Optional[Transaction]:
+        """Retrieve a transaction without explicitly acquiring a row lock."""
         statement = (
             select(TransactionDB)
-            .where(
-                TransactionDB.id == transaction_id,
-                )
+            .where(TransactionDB.id == transaction_id)
         )
-
-        transaction_db = (
-            self.db.execute(statement)
-            .scalar_one_or_none()
-        )
+        transaction_db = self.db.execute(
+            statement
+        ).scalar_one_or_none()
 
         if transaction_db is None:
             return None
 
         return self._to_domain_model(transaction_db)
 
-    def update(
+    def get_for_update(
             self,
-            transaction: Transaction,
-    ) -> None:
+            transaction_id: str,
+    ) -> Optional[Transaction]:
         """
-        Persist changes to an existing transaction.
+        Retrieve a transaction while acquiring a PostgreSQL row-level lock.
 
-        Transaction lifecycle events are append-only. Existing persisted
-        events are preserved, while new events present in the domain
-        transaction history are appended.
-
-        The transaction version is not modified here. Concurrency control
-        for lifecycle operations is provided by get_for_update() and the
-        surrounding database transaction.
-
-        Raises:
-            ValueError:
-                If the transaction does not exist in PostgreSQL.
+        The lock remains held until the surrounding transaction commits
+        or rolls back.
         """
         statement = (
             select(TransactionDB)
-            .where(
-                TransactionDB.id == transaction.transaction_id,
-                )
+            .where(TransactionDB.id == transaction_id)
+            .with_for_update()
         )
+        transaction_db = self.db.execute(
+            statement
+        ).scalar_one_or_none()
 
-        transaction_db = (
-            self.db.execute(statement)
-            .scalar_one_or_none()
+        if transaction_db is None:
+            return None
+
+        return self._to_domain_model(transaction_db)
+
+    def update(self, transaction: Transaction) -> None:
+        """
+        Persist changes to an existing transaction and append new events.
+
+        Existing persisted events are preserved. The caller must acquire
+        the transaction row lock before read-modify-write lifecycle changes.
+
+        Raises:
+            ValueError: If the transaction does not exist.
+        """
+        statement = (
+            select(TransactionDB)
+            .where(TransactionDB.id == transaction.transaction_id)
         )
+        transaction_db = self.db.execute(
+            statement
+        ).scalar_one_or_none()
 
         if transaction_db is None:
             raise ValueError(
-                f"Transaction '{transaction.transaction_id}' does not exist.",
+                f"Transaction '{transaction.transaction_id}' does not exist."
             )
 
         transaction_db.card_id = transaction.card_id
         transaction_db.merchant_id = transaction.merchant_id
-
         transaction_db.authorized_amount = Decimal(
-            str(transaction.authorized_amount),
+            str(transaction.authorized_amount)
         )
         transaction_db.captured_amount = Decimal(
-            str(transaction.captured_amount),
+            str(transaction.captured_amount)
         )
         transaction_db.settled_amount = Decimal(
-            str(transaction.settled_amount),
+            str(transaction.settled_amount)
         )
         transaction_db.refunded_amount = Decimal(
-            str(transaction.refunded_amount),
+            str(transaction.refunded_amount)
         )
-
         transaction_db.status = transaction.status.value
         transaction_db.decline_reason = transaction.decline_reason
 
@@ -154,79 +132,17 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
 
         self.db.flush()
 
-    # -----------------------------------------------------------------------
-    # Concurrency Support
-    # -----------------------------------------------------------------------
-
-    def get_for_update(
-            self,
-            transaction_id: str,
-    ) -> Optional[Transaction]:
-        """
-        Retrieve a transaction while acquiring a PostgreSQL row-level lock.
-
-        The lock remains held until the surrounding database transaction is
-        committed or rolled back.
-
-        This method is intended for payment lifecycle operations that perform
-        a read-modify-write transition, such as:
-
-            capture
-            settlement
-            refund
-
-        Concurrent operations attempting to lock the same transaction row
-        must wait until the current transaction releases the lock.
-
-        Returns:
-            The domain Transaction if found, otherwise None.
-        """
-        statement = (
-            select(TransactionDB)
-            .where(
-                TransactionDB.id == transaction_id,
-                )
-            .with_for_update()
-        )
-
-        transaction_db = (
-            self.db.execute(statement)
-            .scalar_one_or_none()
-        )
-
-        if transaction_db is None:
-            return None
-
-        return self._to_domain_model(transaction_db)
-
-    # -----------------------------------------------------------------------
-    # Mapping Helpers
-    # -----------------------------------------------------------------------
-
     @staticmethod
-    def _to_db_model(
-            transaction: Transaction,
-    ) -> TransactionDB:
-        """
-        Convert a domain Transaction into a SQLAlchemy TransactionDB
-        instance.
-        """
+    def _to_db_model(transaction: Transaction) -> TransactionDB:
+        """Convert a domain Transaction into its persistence model."""
         return TransactionDB(
             id=transaction.transaction_id,
             card_id=transaction.card_id,
             merchant_id=transaction.merchant_id,
-            authorized_amount=Decimal(
-                str(transaction.authorized_amount),
-            ),
-            captured_amount=Decimal(
-                str(transaction.captured_amount),
-            ),
-            settled_amount=Decimal(
-                str(transaction.settled_amount),
-            ),
-            refunded_amount=Decimal(
-                str(transaction.refunded_amount),
-            ),
+            authorized_amount=Decimal(str(transaction.authorized_amount)),
+            captured_amount=Decimal(str(transaction.captured_amount)),
+            settled_amount=Decimal(str(transaction.settled_amount)),
+            refunded_amount=Decimal(str(transaction.refunded_amount)),
             status=transaction.status.value,
             decline_reason=transaction.decline_reason,
             version=1,
@@ -234,16 +150,11 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
         )
 
     @staticmethod
-    def _to_domain_model(
-            transaction_db: TransactionDB,
-    ) -> Transaction:
-        """
-        Convert a SQLAlchemy TransactionDB instance into the domain
-        Transaction model.
-        """
+    def _to_domain_model(transaction_db: TransactionDB) -> Transaction:
+        """Convert a persistence model into its domain representation."""
         events = sorted(
             transaction_db.events,
-            key=lambda event: event.created_at,
+            key=lambda event: (event.created_at, event.id),
         )
 
         return Transaction(
@@ -257,9 +168,7 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             status=transaction_db.status,
             decline_reason=transaction_db.decline_reason,
             history=[
-                PostgresTransactionRepository._event_to_domain_model(
-                    event,
-                )
+                PostgresTransactionRepository._event_to_domain_model(event)
                 for event in events
             ],
             created_at=transaction_db.created_at,
@@ -271,28 +180,20 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             transaction_id: str,
     ) -> TransactionEventDB:
         """
-        Convert a domain TransactionEvent into a SQLAlchemy
-        TransactionEventDB instance.
+        Convert a domain event into a persistence event.
 
-        The domain model intentionally contains only status, timestamp,
-        and detail. Persistence-specific identifiers and relationships are
-        generated here rather than leaking into the domain model.
-
-        The lifecycle status is stored as both event_type and status because
-        the current domain event model does not define a separate event
-        type.
-
-        The optional domain detail is preserved in metadata_json.
+        The current domain model represents lifecycle events using status,
+        timestamp, and detail. The persistence model stores the status as
+        both event_type and status, and stores detail in metadata_json.
         """
-        metadata_json = None
-
-        if event.detail is not None:
-            metadata_json = {
-                "detail": event.detail,
-            }
+        metadata_json = (
+            {"detail": event.detail}
+            if event.detail is not None
+            else None
+        )
 
         return TransactionEventDB(
-            id=_generate_event_id(),
+            id=str(uuid4()),
             transaction_id=transaction_id,
             event_type=event.status.value,
             amount=None,
@@ -305,10 +206,7 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
     def _event_to_domain_model(
             event_db: TransactionEventDB,
     ) -> TransactionEvent:
-        """
-        Convert a SQLAlchemy TransactionEventDB instance into the domain
-        TransactionEvent model.
-        """
+        """Convert a persisted lifecycle event into the domain model."""
         detail = None
 
         if event_db.metadata_json:
@@ -320,54 +218,51 @@ class PostgresTransactionRepository(TransactionRepositoryProtocol):
             detail=detail,
         )
 
-    # -----------------------------------------------------------------------
-    # Event Synchronization
-    # -----------------------------------------------------------------------
-
     def _synchronize_events(
             self,
             transaction_db: TransactionDB,
             transaction: Transaction,
     ) -> None:
         """
-        Append lifecycle events that exist in the domain history but have
-        not yet been persisted.
+        Append events added to the domain history since the last read.
 
-        TransactionEvent does not contain a persistent identifier, so
-        synchronization is based on the append-only history model rather
-        than an event ID.
-
-        Existing database events are never modified or deleted.
+        This uses the append-only history convention: the persisted history
+        must be a prefix of the domain history. It does not modify or delete
+        existing database events.
         """
         existing_events = sorted(
             transaction_db.events,
-            key=lambda event: event.created_at,
+            key=lambda event: (event.created_at, event.id),
         )
-
-        existing_count = len(existing_events)
         domain_events = transaction.history
 
-        if existing_count >= len(domain_events):
-            return
+        existing_count = len(existing_events)
 
-        new_events = domain_events[existing_count:]
+        if existing_count > len(domain_events):
+            raise ValueError(
+                "Domain transaction history is shorter than persisted history."
+            )
 
-        for event in new_events:
+        for index, persisted_event in enumerate(existing_events):
+            domain_event = domain_events[index]
+
+            persisted_detail = None
+            if persisted_event.metadata_json:
+                persisted_detail = persisted_event.metadata_json.get("detail")
+
+            if (
+                    persisted_event.status != domain_event.status.value
+                    or persisted_event.created_at != domain_event.timestamp
+                    or persisted_detail != domain_event.detail
+            ):
+                raise ValueError(
+                    "Domain transaction history does not match persisted history."
+                )
+
+        for event in domain_events[existing_count:]:
             self.db.add(
                 self._event_to_db_model(
                     event=event,
                     transaction_id=transaction.transaction_id,
                 )
             )
-
-
-def _generate_event_id() -> str:
-    """
-    Generate a persistence-only identifier for a transaction event.
-
-    TransactionEvent intentionally does not expose this identifier in the
-    domain model.
-    """
-    from uuid import uuid4
-
-    return str(uuid4())

@@ -1,7 +1,10 @@
+
 import os
 from typing import Generator
+from urllib.parse import urlsplit
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -9,20 +12,55 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # Database Configuration
 # ============================================================================
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg://payguard:payguard@localhost:5432/payguard",
+DEFAULT_DATABASE_URL = (
+    "postgresql+psycopg://payguard:payguard@localhost:5432/payguard"
 )
+
+
+def _get_database_url() -> str:
+    """
+    Read and validate the database URL.
+
+    DATABASE_URL should be supplied through the environment for deployments.
+    The default is intended only for local development.
+    """
+    database_url = os.getenv(
+        "DATABASE_URL",
+        DEFAULT_DATABASE_URL,
+    ).strip()
+
+    if not database_url:
+        raise RuntimeError("DATABASE_URL must not be empty")
+
+    parsed_url = urlsplit(database_url)
+
+    if parsed_url.scheme != "postgresql+psycopg":
+        raise RuntimeError(
+            "DATABASE_URL must use the postgresql+psycopg driver"
+        )
+
+    if not parsed_url.hostname or not parsed_url.path.strip("/"):
+        raise RuntimeError(
+            "DATABASE_URL must specify a database host and database name"
+        )
+
+    return database_url
+
+
+DATABASE_URL = _get_database_url()
 
 
 # ============================================================================
 # SQLAlchemy Engine
 # ============================================================================
 
-engine = create_engine(
+engine: Engine = create_engine(
     DATABASE_URL,
-    future=True,
     pool_pre_ping=True,
+    pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
 )
 
 
@@ -32,6 +70,7 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(
     bind=engine,
+    class_=Session,
     autoflush=False,
     autocommit=False,
     expire_on_commit=False,
@@ -44,14 +83,12 @@ SessionLocal = sessionmaker(
 
 class Base(DeclarativeBase):
     """
-    Base class for all SQLAlchemy database models.
+    Base class for SQLAlchemy persistence models.
 
-    Domain/API models remain defined separately in app.models.
-    SQLAlchemy models will inherit from this class and represent the
+    Domain and API models remain defined separately in app.models.
+    Database models inherit from this class and represent the
     PostgreSQL persistence schema.
     """
-
-    pass
 
 
 # ============================================================================
@@ -60,16 +97,15 @@ class Base(DeclarativeBase):
 
 def get_db() -> Generator[Session, None, None]:
     """
-    Provide a database session for an application operation.
+    Provide a request-scoped SQLAlchemy session.
 
-    The session is committed by the caller when the operation succeeds.
-    If an exception occurs before the caller finishes the operation,
-    the session is rolled back and then closed.
+    The caller owns the transaction boundary and must commit successful
+    operations explicitly. If an exception escapes the request operation,
+    this dependency rolls back the current transaction before closing
+    the session.
 
-    This function is designed to be used as a FastAPI dependency once
-    PostgreSQL-backed repositories are introduced.
+    Sessions are always closed to return pooled connections safely.
     """
-
     db = SessionLocal()
 
     try:

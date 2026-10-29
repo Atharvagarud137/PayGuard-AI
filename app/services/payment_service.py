@@ -1,4 +1,5 @@
-from decimal import Decimal
+
+from decimal import Decimal, InvalidOperation
 
 from app.domain.exceptions import (
     CaptureAmountExceededError,
@@ -15,6 +16,7 @@ from app.models import (
     Transaction,
     TransactionEvent,
     TransactionStatus,
+    validate_money_amount,
 )
 from app.repositories.interfaces import (
     CardRepositoryProtocol,
@@ -24,22 +26,18 @@ from app.repositories.interfaces import (
 
 class PaymentService:
     """
-    Contains payment transaction business logic.
-
-    The service layer owns payment lifecycle operations and delegates
-    persistence to repository contracts.
+    Application service containing payment lifecycle business logic.
 
     The service depends on repository protocols rather than concrete
-    persistence implementations, allowing the underlying storage mechanism
-    to change without changing payment business logic.
+    persistence implementations. This allows in-memory and PostgreSQL
+    repositories to share the same business rules.
 
-    Transaction lifecycle operations that mutate an existing transaction
-    retrieve it through get_for_update() so PostgreSQL-backed repositories
-    can serialize concurrent updates using row-level locking.
+    Operations that mutate existing records use get_for_update() so
+    PostgreSQL repositories can acquire row-level locks before reading
+    and modifying the relevant state.
 
-    Database transaction boundaries are intentionally not owned by this
-    service. The caller is responsible for creating the database session
-    and committing or rolling back the complete operation.
+    Transaction boundaries remain the caller's responsibility. The caller
+    must commit a successful operation or roll back a failed operation.
     """
 
     def __init__(
@@ -51,6 +49,54 @@ class PaymentService:
         self.card_repository = card_repository
 
     # -----------------------------------------------------------------------
+    # Monetary Validation
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_amount(
+            amount: Decimal,
+            *,
+            field_name: str,
+            allow_zero: bool = False,
+    ) -> Decimal:
+        """
+        Normalize and validate a monetary amount.
+
+        Decimal(str(amount)) avoids importing binary floating-point
+        representation errors when callers supply compatible numeric values.
+        """
+        try:
+            normalized = (
+                amount
+                if isinstance(amount, Decimal)
+                else Decimal(str(amount))
+            )
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{field_name} must be a valid monetary amount"
+            ) from exc
+
+        try:
+            normalized = validate_money_amount(normalized)
+        except (ValueError, AttributeError) as exc:
+            raise ValueError(
+                f"{field_name} must be finite and have at most "
+                "two decimal places"
+            ) from exc
+
+        if allow_zero:
+            if normalized < Decimal("0"):
+                raise ValueError(
+                    f"{field_name} cannot be negative"
+                )
+        elif normalized <= Decimal("0"):
+            raise ValueError(
+                f"{field_name} must be greater than zero"
+            )
+
+        return normalized
+
+    # -----------------------------------------------------------------------
     # Transaction Lookup
     # -----------------------------------------------------------------------
 
@@ -58,15 +104,7 @@ class PaymentService:
             self,
             transaction_id: str,
     ) -> Transaction | None:
-        """
-        Retrieve a transaction by ID.
-
-        This is a read-only operation and therefore does not acquire a
-        database row lock.
-
-        Returns:
-            The transaction if found, otherwise None.
-        """
+        """Retrieve a transaction without acquiring a mutation lock."""
         return self.repository.get(transaction_id)
 
     # -----------------------------------------------------------------------
@@ -80,44 +118,35 @@ class PaymentService:
             merchant_id: str,
     ) -> Transaction:
         """
-        Authorize a payment against a card.
+        Authorize a payment against an active card.
 
-        Authorization business rules belong to the payment service rather
-        than the API layer.
+        A successful authorization deducts the authorized amount from the
+        mock card balance and creates an AUTHORIZED transaction.
 
-        Behavior:
-        - Missing cards result in a transaction lookup failure.
-        - Inactive cards cannot be authorized.
-        - Insufficient funds create a DECLINED transaction.
-        - Successful authorization deducts the authorized amount from the
-          card balance and creates an AUTHORIZED transaction.
+        Insufficient funds create a DECLINED transaction without changing
+        the card balance.
 
-        The card is retrieved using get_for_update() so a PostgreSQL-backed
-        repository can acquire a row-level lock before the balance is read
-        and modified. This prevents concurrent authorization operations from
-        spending the same available balance.
-
-        Returns:
-            The newly created payment transaction.
-
-        Raises:
-            TransactionNotFoundError:
-                If the requested card does not exist.
-
-            InvalidTransactionStateError:
-                If the card is not active.
+        The card is locked before its balance is read and modified when
+        the repository supports PostgreSQL row-level locking.
         """
+        amount = self._normalize_amount(
+            amount,
+            field_name="Authorization amount",
+        )
+
         card = self.card_repository.get_for_update(card_id)
 
-        if not card:
-            raise TransactionNotFoundError(
-                "Card not found",
-            )
+        if card is None:
+            raise TransactionNotFoundError("Card not found")
 
         if card.status != CardStatus.ACTIVE:
-            raise InvalidTransactionStateError(
-                "Card is not active",
-            )
+            raise InvalidTransactionStateError("Card is not active")
+
+        balance = self._normalize_amount(
+            card.balance,
+            field_name="Card balance",
+            allow_zero=True,
+        )
 
         transaction = Transaction(
             card_id=card.card_id,
@@ -126,7 +155,7 @@ class PaymentService:
             status=TransactionStatus.AUTHORIZED,
         )
 
-        if card.balance < amount:
+        if balance < amount:
             transaction.status = TransactionStatus.DECLINED
             transaction.decline_reason = "INSUFFICIENT_FUNDS"
 
@@ -138,11 +167,9 @@ class PaymentService:
             )
 
             self.repository.add(transaction)
-
             return transaction
 
-        card.balance -= amount
-
+        card.balance = balance - amount
         self.card_repository.update(card)
 
         transaction.history.append(
@@ -153,7 +180,6 @@ class PaymentService:
         )
 
         self.repository.add(transaction)
-
         return transaction
 
     # -----------------------------------------------------------------------
@@ -168,35 +194,27 @@ class PaymentService:
         """
         Capture an authorized transaction.
 
-        A transaction must be in AUTHORIZED state before capture.
-        The capture amount cannot exceed the authorized amount.
-
-        The transaction is retrieved using get_for_update() so a
-        PostgreSQL-backed repository can acquire a row-level lock before
-        validating and modifying the transaction.
+        This implementation supports one capture per transaction.
+        Partial capture followed by additional captures is not supported.
         """
-        transaction = self.repository.get_for_update(
-            transaction_id,
+        capture_amount = self._normalize_amount(
+            capture_amount,
+            field_name="Capture amount",
         )
 
-        if not transaction:
-            raise TransactionNotFoundError(
-                "Transaction not found",
-            )
+        transaction = self.repository.get_for_update(transaction_id)
+
+        if transaction is None:
+            raise TransactionNotFoundError("Transaction not found")
 
         if transaction.status != TransactionStatus.AUTHORIZED:
             raise InvalidTransactionStateError(
-                "Transaction is not in AUTHORIZED state",
-            )
-
-        if capture_amount <= Decimal("0"):
-            raise ValueError(
-                "Capture amount must be greater than zero",
+                "Transaction is not in AUTHORIZED state"
             )
 
         if capture_amount > transaction.authorized_amount:
             raise CaptureAmountExceededError(
-                "Capture amount exceeds authorized amount",
+                "Capture amount exceeds authorized amount"
             )
 
         self._validate_transition(
@@ -216,7 +234,6 @@ class PaymentService:
         )
 
         self.repository.update(transaction)
-
         return transaction
 
     # -----------------------------------------------------------------------
@@ -227,28 +244,15 @@ class PaymentService:
             self,
             transaction_id: str,
     ) -> Transaction:
-        """
-        Settle a captured transaction.
+        """Settle a captured transaction for its captured amount."""
+        transaction = self.repository.get_for_update(transaction_id)
 
-        A transaction must be in CAPTURED state before settlement.
-        The settled amount is equal to the captured amount.
-
-        The transaction is retrieved using get_for_update() so a
-        PostgreSQL-backed repository can acquire a row-level lock before
-        validating and modifying the transaction.
-        """
-        transaction = self.repository.get_for_update(
-            transaction_id,
-        )
-
-        if not transaction:
-            raise TransactionNotFoundError(
-                "Transaction not found",
-            )
+        if transaction is None:
+            raise TransactionNotFoundError("Transaction not found")
 
         if transaction.status != TransactionStatus.CAPTURED:
             raise InvalidTransactionStateError(
-                "Transaction is not in CAPTURED state",
+                "Transaction is not in CAPTURED state"
             )
 
         self._validate_transition(
@@ -268,7 +272,6 @@ class PaymentService:
         )
 
         self.repository.update(transaction)
-
         return transaction
 
     # -----------------------------------------------------------------------
@@ -283,50 +286,52 @@ class PaymentService:
         """
         Refund a settled transaction.
 
-        Supports:
-        - Full refunds
-        - Partial refunds
-        - Multiple partial refunds
-        - Partial refund followed by a final full refund
+        Supports partial refunds and repeated refunds until the full
+        settled amount has been refunded.
 
-        The transaction is retrieved using get_for_update() so a
-        PostgreSQL-backed repository can serialize concurrent refund
-        operations against the same transaction.
-
-        Returns:
-            A tuple containing the updated transaction and the remaining
-            refundable balance.
+        Refund operations acquire a transaction row lock through the
+        repository so concurrent refunds cannot independently calculate
+        their limits from the same stale transaction state.
         """
-        transaction = self.repository.get_for_update(
-            transaction_id,
+        refund_amount = self._normalize_amount(
+            refund_amount,
+            field_name="Refund amount",
         )
 
-        if not transaction:
-            raise TransactionNotFoundError(
-                "Transaction not found",
-            )
+        transaction = self.repository.get_for_update(transaction_id)
+
+        if transaction is None:
+            raise TransactionNotFoundError("Transaction not found")
 
         if transaction.status not in (
                 TransactionStatus.SETTLED,
                 TransactionStatus.PARTIALLY_REFUNDED,
         ):
             raise InvalidTransactionStateError(
-                "Transaction is not settled",
+                "Transaction is not settled"
             )
 
-        if refund_amount <= Decimal("0"):
-            raise ValueError(
-                "Refund amount must be greater than zero",
-            )
-
-        remaining = (
-                transaction.settled_amount
-                - transaction.refunded_amount
+        settled_amount = self._normalize_amount(
+            transaction.settled_amount,
+            field_name="Settled amount",
+            allow_zero=True,
         )
+        refunded_amount = self._normalize_amount(
+            transaction.refunded_amount,
+            field_name="Previously refunded amount",
+            allow_zero=True,
+        )
+
+        if refunded_amount > settled_amount:
+            raise InvalidTransactionStateError(
+                "Previously refunded amount exceeds settled amount"
+            )
+
+        remaining = settled_amount - refunded_amount
 
         if refund_amount > remaining:
             raise RefundAmountExceededError(
-                "Refund amount exceeds remaining refundable balance",
+                "Refund amount exceeds remaining refundable balance"
             )
 
         remaining_after = remaining - refund_amount
@@ -346,7 +351,7 @@ class PaymentService:
             ),
         )
 
-        transaction.refunded_amount += refund_amount
+        transaction.refunded_amount = refunded_amount + refund_amount
         transaction.status = target_status
 
         transaction.history.append(
@@ -357,11 +362,10 @@ class PaymentService:
         )
 
         self.repository.update(transaction)
-
         return transaction, remaining_after
 
     # -----------------------------------------------------------------------
-    # Internal Helpers
+    # State Transition Helper
     # -----------------------------------------------------------------------
 
     @staticmethod
@@ -370,11 +374,7 @@ class PaymentService:
             target_status: TransactionStatus,
             expected_state: str,
     ) -> None:
-        """
-        Validate a transaction state transition and translate the domain
-        state-machine exception into the service-layer exception exposed
-        to callers.
-        """
+        """Translate state-machine failures into service-layer exceptions."""
         try:
             validate_transition(
                 current_status,

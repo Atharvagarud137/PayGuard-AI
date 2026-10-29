@@ -1,3 +1,4 @@
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -25,25 +26,7 @@ from app.database import Base
 # ============================================================================
 
 class CardDB(Base):
-    """
-    PostgreSQL persistence model for payment cards.
-
-    This model is deliberately separate from app.models.Card.
-
-    app.models contains domain/API models, while this class represents the
-    relational persistence schema used by PostgreSQL.
-
-    The persistence schema mirrors the current domain Card model:
-
-        card_id      -> id
-        card_number
-        cardholder_name
-        network
-        balance
-        status
-        expiry_date
-        created_at
-    """
+    """PostgreSQL persistence model for mock payment cards."""
 
     __tablename__ = "cards"
 
@@ -116,19 +99,7 @@ class CardDB(Base):
 # ============================================================================
 
 class TransactionDB(Base):
-    """
-    PostgreSQL persistence model for payment transactions.
-
-    The transaction model stores the monetary values required to reconstruct
-    the payment lifecycle without relying on application memory.
-
-    The version column provides the foundation for optimistic concurrency
-    control when transaction state transitions are made atomic.
-
-    Row-level locking through SELECT ... FOR UPDATE will be used first for
-    lifecycle operations. The version field remains available as an
-    additional concurrency mechanism where appropriate.
-    """
+    """PostgreSQL persistence model for payment transactions."""
 
     __tablename__ = "transactions"
 
@@ -139,10 +110,7 @@ class TransactionDB(Base):
 
     card_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey(
-            "cards.id",
-            ondelete="RESTRICT",
-        ),
+        ForeignKey("cards.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -216,6 +184,7 @@ class TransactionDB(Base):
         "TransactionEventDB",
         back_populates="transaction",
         cascade="all, delete-orphan",
+        order_by="TransactionEventDB.created_at",
     )
 
     audit_events: Mapped[list["AuditEventDB"]] = relationship(
@@ -246,6 +215,18 @@ class TransactionDB(Base):
             name="ck_transactions_refunded_amount_non_negative",
         ),
         CheckConstraint(
+            "captured_amount <= authorized_amount",
+            name="ck_transactions_capture_within_authorization",
+        ),
+        CheckConstraint(
+            "settled_amount <= captured_amount",
+            name="ck_transactions_settlement_within_capture",
+        ),
+        CheckConstraint(
+            "refunded_amount <= settled_amount",
+            name="ck_transactions_refund_within_settlement",
+        ),
+        CheckConstraint(
             "version >= 1",
             name="ck_transactions_version_positive",
         ),
@@ -257,12 +238,7 @@ class TransactionDB(Base):
 # ============================================================================
 
 class TransactionEventDB(Base):
-    """
-    PostgreSQL persistence model for transaction lifecycle events.
-
-    Events are append-oriented records used to preserve the transaction
-    history independently of the current transaction status.
-    """
+    """Append-oriented persistence model for transaction lifecycle events."""
 
     __tablename__ = "transaction_events"
 
@@ -273,10 +249,7 @@ class TransactionEventDB(Base):
 
     transaction_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey(
-            "transactions.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("transactions.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -318,6 +291,11 @@ class TransactionEventDB(Base):
             "amount IS NULL OR amount >= 0",
             name="ck_transaction_events_amount_non_negative",
         ),
+        Index(
+            "ix_transaction_events_transaction_created",
+            "transaction_id",
+            "created_at",
+        ),
     )
 
 
@@ -326,13 +304,7 @@ class TransactionEventDB(Base):
 # ============================================================================
 
 class AuditEventDB(Base):
-    """
-    PostgreSQL persistence model for operational audit events.
-
-    Audit events are intentionally separate from transaction lifecycle
-    events so security, operational, and reliability information can be
-    queried independently from the payment state history.
-    """
+    """Persistence model for operational and payment audit events."""
 
     __tablename__ = "audit_events"
 
@@ -343,10 +315,7 @@ class AuditEventDB(Base):
 
     transaction_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey(
-            "transactions.id",
-            ondelete="SET NULL",
-        ),
+        ForeignKey("transactions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -363,7 +332,7 @@ class AuditEventDB(Base):
     )
 
     correlation_id: Mapped[str] = mapped_column(
-        String(36),
+        String(255),
         nullable=False,
         index=True,
     )
@@ -405,20 +374,11 @@ class AuditEventDB(Base):
 
 class IdempotencyRecordDB(Base):
     """
-    PostgreSQL persistence model for idempotency records.
+    Persistence model for completed idempotent requests.
 
-    The idempotency key is unique at the database level.
-
-    This database constraint is essential because an application-level
-    existence check alone is vulnerable to a race:
-
-        Request A -> check key -> absent
-        Request B -> check key -> absent
-        Request A -> insert
-        Request B -> insert
-
-    PostgreSQL must therefore enforce uniqueness even when concurrent
-    requests reach the application simultaneously.
+    The unique key constraint protects against duplicate key records.
+    Atomic claiming and coordination of concurrent business operations
+    must also be implemented in the repository/service layer.
     """
 
     __tablename__ = "idempotency_records"
@@ -431,8 +391,6 @@ class IdempotencyRecordDB(Base):
     idempotency_key: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
-        unique=True,
-        index=True,
     )
 
     fingerprint: Mapped[str] = mapped_column(

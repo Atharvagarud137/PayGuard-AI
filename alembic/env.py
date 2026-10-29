@@ -1,5 +1,7 @@
+
 import os
 from logging.config import fileConfig
+from urllib.parse import urlsplit
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -33,9 +35,8 @@ if config.config_file_name is not None:
 # SQLAlchemy Metadata
 # ============================================================================
 
-# Importing the database models above ensures that every SQLAlchemy model
-# is registered with Base.metadata before Alembic performs autogeneration.
-
+# Importing the models ensures their tables are registered with Base.metadata
+# before Alembic performs migration autogeneration.
 target_metadata = Base.metadata
 
 
@@ -47,27 +48,36 @@ def get_database_url() -> str:
     """
     Return the database URL used by Alembic.
 
-    DATABASE_URL takes precedence so Alembic uses the same database
-    configuration as the application.
-
-    If DATABASE_URL is not defined, the value from alembic.ini is used.
+    DATABASE_URL takes precedence so migrations use the same database
+    configuration as the application. If it is not set, sqlalchemy.url
+    from alembic.ini is used.
     """
     database_url = os.getenv("DATABASE_URL")
 
-    if database_url:
-        return database_url
+    if database_url is None or not database_url.strip():
+        database_url = config.get_main_option("sqlalchemy.url")
 
-    configured_url = config.get_main_option(
-        "sqlalchemy.url"
-    )
+    if not database_url or not database_url.strip():
+        raise RuntimeError(
+            "Database URL is not configured. Set DATABASE_URL or define "
+            "sqlalchemy.url in alembic.ini."
+        )
 
-    if configured_url:
-        return configured_url
+    database_url = database_url.strip()
+    parsed_url = urlsplit(database_url)
 
-    raise RuntimeError(
-        "Database URL is not configured. Set DATABASE_URL or define "
-        "sqlalchemy.url in alembic.ini."
-    )
+    if parsed_url.scheme != "postgresql+psycopg":
+        raise RuntimeError(
+            "Alembic requires a PostgreSQL URL using the "
+            "postgresql+psycopg driver."
+        )
+
+    if not parsed_url.hostname or not parsed_url.path.strip("/"):
+        raise RuntimeError(
+            "The database URL must specify a database host and database name."
+        )
+
+    return database_url
 
 
 # ============================================================================
@@ -76,10 +86,9 @@ def get_database_url() -> str:
 
 def run_migrations_offline() -> None:
     """
-    Run migrations without creating a database connection.
+    Generate migration SQL without creating a database connection.
 
-    This mode generates SQL statements that can be inspected or executed
-    separately.
+    The generated SQL can be reviewed before execution against PostgreSQL.
     """
     url = get_database_url()
 
@@ -87,9 +96,7 @@ def run_migrations_offline() -> None:
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={
-            "paramstyle": "named",
-        },
+        dialect_opts={"paramstyle": "named"},
         compare_type=True,
         compare_server_default=True,
     )
@@ -103,9 +110,7 @@ def run_migrations_offline() -> None:
 # ============================================================================
 
 def run_migrations_online() -> None:
-    """
-    Run migrations using an active SQLAlchemy database connection.
-    """
+    """Run migrations using an active SQLAlchemy database connection."""
     configuration = config.get_section(
         config.config_ini_section,
     )
@@ -121,16 +126,19 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-            compare_server_default=True,
-        )
+    try:
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                compare_type=True,
+                compare_server_default=True,
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        connectable.dispose()
 
 
 # ============================================================================
