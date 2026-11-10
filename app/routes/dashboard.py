@@ -1,13 +1,22 @@
 from typing import List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
+from app.database import get_db
+from app.database_models import CardDB, TransactionDB
 from app.models import (
     Card,
     Transaction,
     TransactionStatus,
 )
-from app.storage import storage
+from app.repositories.postgres_card_repository import (
+    PostgresCardRepository,
+)
+from app.repositories.postgres_transaction_repository import (
+    PostgresTransactionRepository,
+)
 
 
 router = APIRouter(
@@ -21,34 +30,31 @@ router = APIRouter(
 # ============================================================================
 
 @router.get("/dashboard/summary")
-def get_dashboard_summary():
+def get_dashboard_summary(
+        db: Session = Depends(get_db),
+) -> dict[str, int | float]:
     """
-    Return aggregated payment gateway metrics for the dashboard.
+    Return dashboard metrics from the PostgreSQL transaction records.
 
-    Status classification:
-
-    Successful:
-        SETTLED
-        REFUNDED
-        PARTIALLY_REFUNDED
-
-    Pending:
-        AUTHORIZED
-        CAPTURED
-
-    Declined:
-        DECLINED
+    The database is the single source of truth for payment operations.
     """
+    status_rows = db.execute(
+        select(
+            TransactionDB.status,
+            func.count(TransactionDB.id),
+        ).group_by(TransactionDB.status)
+    ).all()
 
-    transactions = list(storage.transactions.values())
+    counts = {
+        str(status): int(count)
+        for status, count in status_rows
+    }
 
-    total_transactions = len(transactions)
+    total_transactions = sum(counts.values())
 
     successful = sum(
-        1
-        for transaction in transactions
-        if transaction.status
-        in (
+        counts.get(status.value, 0)
+        for status in (
             TransactionStatus.SETTLED,
             TransactionStatus.REFUNDED,
             TransactionStatus.PARTIALLY_REFUNDED,
@@ -56,20 +62,14 @@ def get_dashboard_summary():
     )
 
     pending = sum(
-        1
-        for transaction in transactions
-        if transaction.status
-        in (
+        counts.get(status.value, 0)
+        for status in (
             TransactionStatus.AUTHORIZED,
             TransactionStatus.CAPTURED,
         )
     )
 
-    declined = sum(
-        1
-        for transaction in transactions
-        if transaction.status == TransactionStatus.DECLINED
-    )
+    declined = counts.get(TransactionStatus.DECLINED.value, 0)
 
     success_rate = (
         round((successful / total_transactions) * 100, 2)
@@ -91,21 +91,31 @@ def get_dashboard_summary():
 # ============================================================================
 
 @router.get("/transactions", response_model=List[Transaction])
-def get_transactions():
+def get_transactions(
+        db: Session = Depends(get_db),
+) -> List[Transaction]:
     """
-    Return all transactions currently stored by the payment gateway.
+    Return PostgreSQL-backed transactions, newest first.
 
-    Transactions are returned newest first.
+    Lifecycle events are loaded with the transaction so conversion does not
+    depend on a session that has already been closed.
     """
-
-    transactions = list(storage.transactions.values())
-
-    transactions.sort(
-        key=lambda transaction: transaction.created_at,
-        reverse=True,
+    statement = (
+        select(TransactionDB)
+        .options(selectinload(TransactionDB.events))
+        .order_by(
+            TransactionDB.created_at.desc(),
+            TransactionDB.id.desc(),
+        )
     )
+    transaction_records = db.execute(
+        statement
+    ).scalars().all()
 
-    return transactions
+    return [
+        PostgresTransactionRepository._to_domain_model(record)
+        for record in transaction_records
+    ]
 
 
 # ============================================================================
@@ -113,18 +123,21 @@ def get_transactions():
 # ============================================================================
 
 @router.get("/cards", response_model=List[Card])
-def get_cards():
+def get_cards(
+        db: Session = Depends(get_db),
+) -> List[Card]:
     """
-    Return all cards currently stored by the payment gateway.
+    Return PostgreSQL-backed cards, newest first.
 
-    Cards are returned newest first.
+    Card numbers remain masked by the domain model and API contract.
     """
-
-    cards = list(storage.cards.values())
-
-    cards.sort(
-        key=lambda card: card.created_at,
-        reverse=True,
+    statement = select(CardDB).order_by(
+        CardDB.created_at.desc(),
+        CardDB.id.desc(),
     )
+    card_records = db.execute(statement).scalars().all()
 
-    return cards
+    return [
+        PostgresCardRepository._to_domain_model(record)
+        for record in card_records
+    ]
