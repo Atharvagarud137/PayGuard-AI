@@ -2,6 +2,9 @@ import os
 from collections.abc import Generator
 
 import pytest
+
+# Ensure the app registers test-only routes before app.main is imported.
+os.environ.setdefault("PAYGUARD_ENV", "test")
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -106,8 +109,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         yield db_session
 
     previous_override = app.dependency_overrides.get(get_db)
-    previous_environment = os.environ.get("PAYGUARD_ENV")
-    os.environ["PAYGUARD_ENV"] = "test"
     app.dependency_overrides[get_db] = override_get_db
 
     try:
@@ -118,11 +119,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
             app.dependency_overrides.pop(get_db, None)
         else:
             app.dependency_overrides[get_db] = previous_override
-
-        if previous_environment is None:
-            os.environ.pop("PAYGUARD_ENV", None)
-        else:
-            os.environ["PAYGUARD_ENV"] = previous_environment
 
 
 @pytest.fixture
