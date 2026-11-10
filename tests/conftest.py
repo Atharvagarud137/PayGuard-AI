@@ -2,6 +2,9 @@ import os
 from collections.abc import Generator
 
 import pytest
+
+# Ensure the app registers test-only routes before app.main is imported.
+os.environ.setdefault("PAYGUARD_ENV", "test")
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
