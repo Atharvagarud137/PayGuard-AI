@@ -1,4 +1,4 @@
-
+import os
 import hashlib
 import random
 import string
@@ -107,7 +107,12 @@ def get_idempotency_repository(
 # Test State Reset
 # ============================================================================
 
-@app.post("/api/v1/test/reset")
+# Register the destructive test helper only in explicit test environments.
+# The endpoint is absent from normal development and production deployments.
+if os.getenv("PAYGUARD_ENV", "development").strip().lower() == "test":
+    app.post("/api/v1/test/reset")(reset_test_state)
+
+
 def reset_test_state(
         db: Session = Depends(get_db),
 ) -> dict[str, str]:
