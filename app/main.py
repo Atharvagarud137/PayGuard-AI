@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError

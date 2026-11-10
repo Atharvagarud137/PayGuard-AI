@@ -11,7 +11,7 @@ def test_capture_success(client, authorized_transaction):
     data = response.json()
 
     assert data["status"] == "CAPTURED"
-    assert data["captured_amount"] == 1000
+    assert float(data["captured_amount"]) == 1000.0
 
 
 def test_capture_partial_amount(client, authorized_transaction):
@@ -27,7 +27,7 @@ def test_capture_partial_amount(client, authorized_transaction):
     data = response.json()
 
     assert data["status"] == "CAPTURED"
-    assert data["captured_amount"] == 500
+    assert float(data["captured_amount"]) == 500.0
 
 
 def test_capture_exceeds_authorized_amount(
@@ -190,7 +190,7 @@ def test_capture_idempotency_does_not_double_capture(
     transaction = lookup_response.json()
 
     assert transaction["status"] == "CAPTURED"
-    assert transaction["captured_amount"] == 1000
+    assert float(transaction["captured_amount"]) == 1000.0
 
 
 def test_capture_idempotency_rejects_different_request(

@@ -124,7 +124,7 @@ def issued_e2e_card(
 
     assert card["network"] == payload["network"]
 
-    assert card["balance"] == (
+    assert float(card["balance"]) == float(
         payload["initial_balance"]
     )
 
@@ -175,7 +175,7 @@ def authorized_transaction(
 
     assert transaction["status"] == "AUTHORIZED"
 
-    assert transaction["authorized_amount"] == 100
+    assert float(transaction["authorized_amount"]) == 100.0
 
     assert "transaction_id" in transaction
 

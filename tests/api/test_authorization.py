@@ -1,4 +1,4 @@
-from app.storage import storage
+from app.database_models import CardDB
 from app.models import CardStatus
 
 
@@ -13,7 +13,7 @@ def test_authorize_success(client, issued_card):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "AUTHORIZED"
-    assert data["authorized_amount"] == 1000
+    assert float(data["authorized_amount"]) == 1000.0
     assert "transaction_id" in data
 
 
@@ -42,11 +42,12 @@ def test_authorize_card_not_found(client):
     assert response.status_code == 404
 
 
-def test_authorize_inactive_card(client, issued_card):
+def test_authorize_inactive_card(client, issued_card, db_session):
     """Negative case: authorizing against an inactive card should return 400."""
-    card = storage.get_card(issued_card["card_id"])
-    card.status = CardStatus.INACTIVE
-    storage.update_card(card)
+    card = db_session.get(CardDB, issued_card["card_id"])
+    assert card is not None
+    card.status = CardStatus.INACTIVE.value
+    db_session.flush()
 
     response = client.post("/api/v1/transactions/authorize", json={
         "card_id": issued_card["card_id"],
@@ -68,7 +69,7 @@ def test_authorize_exact_balance_amount(client, issued_card):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "AUTHORIZED"
-    assert data["authorized_amount"] == issued_card["balance"]
+    assert float(data["authorized_amount"]) == float(issued_card["balance"])
 
 
 def test_authorize_missing_merchant_id(client, issued_card):
@@ -133,7 +134,7 @@ def test_authorize_idempotency_replays_same_response(client, issued_card):
 
     assert first_data == second_data
     assert first_data["status"] == "AUTHORIZED"
-    assert first_data["authorized_amount"] == 1000
+    assert float(first_data["authorized_amount"]) == 1000.0
 
 
 def test_authorize_idempotency_does_not_double_charge(
@@ -172,9 +173,14 @@ def test_authorize_idempotency_does_not_double_charge(
     assert first_response.status_code == 200
     assert second_response.status_code == 200
 
-    card = storage.get_card(issued_card["card_id"])
+    cards_response = client.get("/api/v1/cards")
+    assert cards_response.status_code == 200
+    card = next(
+        card for card in cards_response.json()
+        if card["card_id"] == issued_card["card_id"]
+    )
 
-    assert card.balance == initial_balance - 1000
+    assert float(card["balance"]) == float(initial_balance) - 1000.0
 
 
 def test_authorize_idempotency_rejects_different_request(

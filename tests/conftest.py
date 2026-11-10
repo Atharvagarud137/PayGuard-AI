@@ -206,3 +206,25 @@ def captured_transaction(
     )
 
     return transaction
+
+@pytest.fixture
+def settled_transaction(
+        client: TestClient,
+        captured_transaction: dict,
+) -> dict:
+    """Create a settled transaction through the API."""
+    transaction_id = captured_transaction["transaction_id"]
+    response = client.post(
+        f"/api/v1/transactions/{transaction_id}/settle"
+    )
+
+    assert response.status_code == 200, (
+        f"Settlement setup failed: HTTP {response.status_code}: "
+        f"{response.text}"
+    )
+
+    transaction = response.json()
+    assert transaction["status"] == "SETTLED", (
+        f"Expected SETTLED transaction, received: {transaction}"
+    )
+    return transaction
