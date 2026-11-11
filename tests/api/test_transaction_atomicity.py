@@ -14,7 +14,10 @@ from app.database_models import (
     TransactionDB,
     TransactionEventDB,
 )
-from app.domain.exceptions import InvalidTransactionStateError
+from app.domain.exceptions import (
+    InvalidTransactionStateError,
+    RefundAmountExceededError,
+)
 from app.models import (
     Card,
     CardNetwork,
@@ -339,6 +342,100 @@ def test_concurrent_captures_apply_only_one_lifecycle_transition(test_engine):
             assert sorted(event_statuses) == [
                 TransactionStatus.AUTHORIZED.value,
                 TransactionStatus.CAPTURED.value,
+            ]
+    finally:
+        _cleanup_card(factory, card_id)
+
+
+
+def test_concurrent_refunds_cannot_exceed_settled_amount(test_engine):
+    """
+    Two independent PostgreSQL sessions refunding 700 against a settled
+    amount of 1000 must serialize on the transaction row. Only one refund
+    can be accepted.
+    """
+    factory = _session_factory(test_engine)
+    card_id = str(uuid4())
+    transaction_id = str(uuid4())
+    _seed_card(factory, card_id, Decimal("1000.00"))
+
+    transaction = Transaction(
+        transaction_id=transaction_id,
+        card_id=card_id,
+        merchant_id="merchant-concurrency-test",
+        authorized_amount=Decimal("1000.00"),
+        captured_amount=Decimal("1000.00"),
+        settled_amount=Decimal("1000.00"),
+        status=TransactionStatus.SETTLED,
+        history=[
+            TransactionEvent(
+                status=TransactionStatus.AUTHORIZED,
+                detail="Payment authorized",
+            ),
+            TransactionEvent(
+                status=TransactionStatus.CAPTURED,
+                detail="Amount captured",
+            ),
+            TransactionEvent(
+                status=TransactionStatus.SETTLED,
+                detail="Transaction settled",
+            ),
+        ],
+    )
+
+    with factory() as db:
+        PostgresTransactionRepository(db).add(transaction)
+        db.commit()
+
+    start_together = Barrier(2)
+
+    def refund(_):
+        with factory() as db:
+            start_together.wait(timeout=10)
+            service = PaymentService(
+                PostgresTransactionRepository(db),
+                PostgresCardRepository(db),
+            )
+            try:
+                updated, _remaining = service.refund(
+                    transaction_id=transaction_id,
+                    refund_amount=Decimal("700.00"),
+                )
+                db.commit()
+                return updated.status.value
+            except RefundAmountExceededError:
+                db.rollback()
+                return "REJECTED"
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(refund, range(2)))
+
+        assert outcomes.count(
+            TransactionStatus.PARTIALLY_REFUNDED.value
+        ) == 1
+        assert outcomes.count("REJECTED") == 1
+
+        with factory() as db:
+            persisted = db.get(TransactionDB, transaction_id)
+            assert persisted is not None
+            assert (
+                persisted.status
+                == TransactionStatus.PARTIALLY_REFUNDED.value
+            )
+            assert persisted.refunded_amount == Decimal("700.00")
+
+            event_statuses = db.execute(
+                select(TransactionEventDB.status)
+                .where(
+                    TransactionEventDB.transaction_id == transaction_id
+                )
+            ).scalars().all()
+            assert sorted(event_statuses) == [
+                TransactionStatus.AUTHORIZED.value,
+                TransactionStatus.CAPTURED.value,
+                TransactionStatus.PARTIALLY_REFUNDED.value,
+                TransactionStatus.SETTLED.value,
             ]
     finally:
         _cleanup_card(factory, card_id)
