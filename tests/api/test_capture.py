@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 def test_capture_success(client, authorized_transaction):
     """Positive case: capturing the full authorized amount should succeed."""
 
@@ -278,4 +280,4 @@ def test_capture_without_idempotency_key_preserves_existing_behavior(
     data = response.json()
 
     assert data["status"] == "CAPTURED"
-    assert data["captured_amount"] == 1000
+    assert Decimal(data["captured_amount"]) == Decimal("1000")

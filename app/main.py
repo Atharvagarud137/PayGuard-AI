@@ -251,7 +251,12 @@ def store_idempotency_result(
     idempotency_repository.add(
         idempotency_key=idempotency_key.strip(),
         fingerprint=fingerprint,
-        response=response,
+        # Keep the persisted replay payload aligned with the API's JSON
+        # representation while preserving exact decimal values as strings.
+        response=jsonable_encoder(
+            response,
+            custom_encoder={Decimal: str},
+        ),
     )
 
 

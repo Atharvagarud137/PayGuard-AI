@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 def test_refund_full_amount(client, settled_transaction):
     """Positive case: refund the full settled amount."""
     transaction_id = settled_transaction["transaction_id"]
@@ -14,7 +16,7 @@ def test_refund_full_amount(client, settled_transaction):
 
     assert data["transaction_id"] == transaction_id
     assert data["status"] == "REFUNDED"
-    assert data["remaining_balance"] == 0
+    assert Decimal(data["remaining_balance"]) == Decimal("0.00")
     assert "refund_id" in data
 
 
@@ -34,7 +36,7 @@ def test_refund_partial_amount(client, settled_transaction):
     data = response.json()
 
     assert data["status"] == "PARTIALLY_REFUNDED"
-    assert data["remaining_balance"] == settled_amount - refund_amount
+    assert Decimal(data["remaining_balance"]) == Decimal("500.00")
 
 
 def test_refund_partial_then_full(client, settled_transaction):
@@ -49,7 +51,7 @@ def test_refund_partial_then_full(client, settled_transaction):
 
     assert first_response.status_code == 200
     assert first_response.json()["status"] == "PARTIALLY_REFUNDED"
-    assert first_response.json()["remaining_balance"] == 500
+    assert Decimal(first_response.json()["remaining_balance"]) == Decimal("500.00")
 
     second_response = client.post(
         f"/api/v1/transactions/{transaction_id}/refund",
@@ -61,7 +63,7 @@ def test_refund_partial_then_full(client, settled_transaction):
     data = second_response.json()
 
     assert data["status"] == "REFUNDED"
-    assert data["remaining_balance"] == 0
+    assert Decimal(data["remaining_balance"]) == Decimal("0.00")
 
 
 def test_refund_multiple_partial_amounts(client, settled_transaction):
@@ -75,7 +77,7 @@ def test_refund_multiple_partial_amounts(client, settled_transaction):
 
     assert first_response.status_code == 200
     assert first_response.json()["status"] == "PARTIALLY_REFUNDED"
-    assert first_response.json()["remaining_balance"] == 750
+    assert Decimal(first_response.json()["remaining_balance"]) == Decimal("750.00")
 
     second_response = client.post(
         f"/api/v1/transactions/{transaction_id}/refund",
@@ -84,7 +86,7 @@ def test_refund_multiple_partial_amounts(client, settled_transaction):
 
     assert second_response.status_code == 200
     assert second_response.json()["status"] == "PARTIALLY_REFUNDED"
-    assert second_response.json()["remaining_balance"] == 500
+    assert Decimal(second_response.json()["remaining_balance"]) == Decimal("500.00")
 
 
 def test_refund_exceeds_remaining_balance(client, settled_transaction):
