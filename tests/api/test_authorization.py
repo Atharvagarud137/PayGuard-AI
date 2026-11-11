@@ -228,7 +228,7 @@ def test_authorize_idempotency_rejects_different_request(
     assert (
             data["detail"]
             == "Idempotency-Key has already been used for a different "
-               "authorization request"
+               "request"
     )
 
 
