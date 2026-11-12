@@ -3,7 +3,7 @@ import json
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -21,17 +21,39 @@ class PostgresIdempotencyRepository(IdempotencyRepositoryProtocol):
     The repository does not commit or roll back transactions. The caller
     owns transaction boundaries.
 
-    A unique database constraint protects idempotency keys from duplicate
-    inserts. A matching fingerprint represents the same request; a
-    different fingerprint represents conflicting key reuse.
-
-    Database uniqueness alone does not guarantee exactly-once business
-    execution. The application must coordinate idempotency records and
-    payment operations within appropriate transaction boundaries.
+    A transaction-scoped PostgreSQL advisory lock serializes requests that
+    share a key. The completed replay record is committed in the same
+    transaction as the payment mutation. A unique database constraint
+    remains the final safeguard against duplicate records.
     """
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def claim(self, idempotency_key: str) -> None:
+        """
+        Acquire a transaction-scoped lock for one idempotency key.
+
+        Requests using the same key serialize until the caller commits or
+        rolls back. The completed payment mutation and its replay record are
+        therefore observed together by the next request.
+        """
+        if not idempotency_key or not idempotency_key.strip():
+            raise ValueError("Idempotency key must not be empty.")
+
+        if len(idempotency_key) > 255:
+            raise ValueError(
+                "Idempotency key must be 255 characters or fewer."
+            )
+
+        lock_key = f"payguard-ai:idempotency:{idempotency_key}"
+        self.db.execute(
+            text(
+                "SELECT pg_advisory_xact_lock("
+                "hashtextextended(:lock_key, 0))"
+            ),
+            {"lock_key": lock_key},
+        )
 
     def get(
             self,

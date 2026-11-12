@@ -1,5 +1,6 @@
 import os
 import hashlib
+import json
 import random
 import string
 import uuid
@@ -176,8 +177,12 @@ def check_simulated_failure(
 
 
 def build_fingerprint(*parts: Any) -> str:
-    """Create a stable SHA-256 fingerprint from request fields."""
-    normalized = "|".join(str(part) for part in parts)
+    """Create an unambiguous, stable SHA-256 request fingerprint."""
+    normalized = json.dumps(
+        [str(part) for part in parts],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
@@ -203,17 +208,31 @@ def build_capture_fingerprint(
     )
 
 
+def build_settlement_fingerprint(transaction_id: str) -> str:
+    return build_fingerprint("settlement", transaction_id)
+
+
+def build_refund_fingerprint(
+        transaction_id: str,
+        request: RefundRequest,
+) -> str:
+    return build_fingerprint(
+        "refund",
+        transaction_id,
+        Decimal(str(request.refund_amount)).normalize(),
+    )
+
+
 def validate_idempotency_key(
         idempotency_key: Optional[str],
         fingerprint: str,
         idempotency_repository: PostgresIdempotencyRepository,
 ) -> Optional[dict]:
     """
-    Return a previous response when a key and fingerprint match.
+    Serialize requests sharing a key, then return a matching prior response.
 
-    Reusing a key for a different request is rejected. This lookup alone
-    does not provide race-safe request claiming; that requires atomic
-    coordination in the persistence and service layers.
+    The PostgreSQL transaction-scoped advisory lock is held until the
+    caller commits or rolls back the payment operation and its replay record.
     """
     if not idempotency_key:
         return None
@@ -222,6 +241,13 @@ def validate_idempotency_key(
     if not key:
         return None
 
+    if len(key) > 255:
+        raise HTTPException(
+            status_code=422,
+            detail="Idempotency-Key must be 255 characters or fewer",
+        )
+
+    idempotency_repository.claim(key)
     record = idempotency_repository.get(key)
     if record is None:
         return None
@@ -610,6 +636,10 @@ def capture_transaction(
 def settle_transaction(
         transaction_id: str,
         x_simulate_failure: Optional[str] = Header(default=None),
+        idempotency_key: Optional[str] = Header(
+            default=None,
+            alias="Idempotency-Key",
+        ),
         correlation_id: Optional[str] = Header(
             default=None,
             alias="X-Correlation-ID",
@@ -625,8 +655,19 @@ def settle_transaction(
         PostgresCardRepository(db),
     )
     audit_service = AuditService(PostgresAuditRepository(db))
+    idempotency_repository = PostgresIdempotencyRepository(db)
+    fingerprint = build_settlement_fingerprint(transaction_id)
 
     try:
+        existing_response = validate_idempotency_key(
+            idempotency_key,
+            fingerprint,
+            idempotency_repository,
+        )
+        if existing_response is not None:
+            db.rollback()
+            return existing_response
+
         transaction = payment_service.settle(transaction_id)
 
         record_audit(
@@ -647,6 +688,13 @@ def settle_transaction(
             "status": transaction.status,
             "settled_at": datetime.now(timezone.utc),
         }
+
+        store_idempotency_result(
+            idempotency_key,
+            fingerprint,
+            response,
+            idempotency_repository,
+        )
         db.commit()
         return response
 
@@ -688,6 +736,10 @@ def refund_transaction(
         transaction_id: str,
         request: RefundRequest,
         x_simulate_failure: Optional[str] = Header(default=None),
+        idempotency_key: Optional[str] = Header(
+            default=None,
+            alias="Idempotency-Key",
+        ),
         correlation_id: Optional[str] = Header(
             default=None,
             alias="X-Correlation-ID",
@@ -703,8 +755,19 @@ def refund_transaction(
         PostgresCardRepository(db),
     )
     audit_service = AuditService(PostgresAuditRepository(db))
+    idempotency_repository = PostgresIdempotencyRepository(db)
+    fingerprint = build_refund_fingerprint(transaction_id, request)
 
     try:
+        existing_response = validate_idempotency_key(
+            idempotency_key,
+            fingerprint,
+            idempotency_repository,
+        )
+        if existing_response is not None:
+            db.rollback()
+            return existing_response
+
         transaction, remaining_after = payment_service.refund(
             transaction_id=transaction_id,
             refund_amount=Decimal(str(request.refund_amount)),
@@ -730,6 +793,12 @@ def refund_transaction(
             detail="Refund successful",
         )
 
+        store_idempotency_result(
+            idempotency_key,
+            fingerprint,
+            response,
+            idempotency_repository,
+        )
         db.commit()
         return response
 
