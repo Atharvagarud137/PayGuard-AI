@@ -1,6 +1,5 @@
 import os
 import hashlib
-import json
 import random
 import string
 import uuid
@@ -177,12 +176,13 @@ def check_simulated_failure(
 
 
 def build_fingerprint(*parts: Any) -> str:
-    """Create an unambiguous, stable SHA-256 request fingerprint."""
-    normalized = json.dumps(
-        [str(part) for part in parts],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+    """
+    Create a stable SHA-256 fingerprint for payment request fields.
+
+    Keep the established encoding so completed authorization and capture
+    records created by earlier versions remain replayable after deployment.
+    """
+    normalized = "|".join(str(part) for part in parts)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
