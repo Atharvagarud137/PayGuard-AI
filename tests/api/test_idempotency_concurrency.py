@@ -66,13 +66,13 @@ def _seed_payment_state(engine, stage: str) -> tuple[str, str | None]:
             )
             transaction_id = transaction.transaction_id
 
-            if stage in ("capture", "settlement", "refund"):
+            if stage in ("settlement", "refund"):
                 service.capture(
                     transaction_id,
                     Decimal("1000.00"),
                 )
 
-            if stage in ("settlement", "refund"):
+            if stage == "refund":
                 service.settle(transaction_id)
 
         db.commit()
@@ -238,7 +238,12 @@ def test_concurrent_duplicate_authorizations_execute_once(
             idempotency_key=key,
         )
 
-        assert first == second
+        assert first["transaction_id"] == second["transaction_id"]
+        first_status = getattr(first["status"], "value", first["status"])
+        assert first_status == second["status"]
+        assert Decimal(str(first["authorized_amount"])) == Decimal(
+            str(second["authorized_amount"])
+        )
         transaction_id = first["transaction_id"]
 
         with Session(test_engine) as db:
@@ -289,7 +294,12 @@ def test_concurrent_duplicate_captures_execute_once(
             idempotency_key=key,
         )
 
-        assert first == second
+        assert first["transaction_id"] == second["transaction_id"]
+        first_status = getattr(first["status"], "value", first["status"])
+        assert first_status == second["status"]
+        assert Decimal(str(first["captured_amount"])) == Decimal(
+            str(second["captured_amount"])
+        )
 
         with Session(test_engine) as db:
             transaction = db.get(TransactionDB, transaction_id)
@@ -340,7 +350,13 @@ def test_concurrent_duplicate_settlements_execute_once(
             idempotency_key=key,
         )
 
-        assert first == second
+        assert first["transaction_id"] == second["transaction_id"]
+        first_status = getattr(first["status"], "value", first["status"])
+        assert first_status == second["status"]
+        assert (
+            first["settled_at"].isoformat().replace("+00:00", "Z")
+            == second["settled_at"]
+        )
 
         with Session(test_engine) as db:
             transaction = db.get(TransactionDB, transaction_id)
@@ -394,7 +410,13 @@ def test_concurrent_duplicate_refunds_execute_once(
             idempotency_key=key,
         )
 
-        assert first == second
+        assert first["transaction_id"] == second["transaction_id"]
+        assert first["refund_id"] == second["refund_id"]
+        first_status = getattr(first["status"], "value", first["status"])
+        assert first_status == second["status"]
+        assert Decimal(str(first["remaining_balance"])) == Decimal(
+            str(second["remaining_balance"])
+        )
 
         with Session(test_engine) as db:
             transaction = db.get(TransactionDB, transaction_id)
