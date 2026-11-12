@@ -5,11 +5,9 @@ from time import monotonic, sleep
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app.database_models import (
     AuditEventDB,
     CardDB,
@@ -17,8 +15,19 @@ from app.database_models import (
     TransactionDB,
     TransactionEventDB,
 )
-from app.main import app
-from app.models import Card, CardNetwork
+from app.main import (
+    authorize_transaction,
+    capture_transaction,
+    refund_transaction,
+    settle_transaction,
+)
+from app.models import (
+    AuthorizeRequest,
+    CaptureRequest,
+    Card,
+    CardNetwork,
+    RefundRequest,
+)
 from app.repositories.postgres_card_repository import (
     PostgresCardRepository,
 )
@@ -76,11 +85,9 @@ def _wait_for_advisory_lock(engine, timeout: float = 10.0) -> None:
     statement = text(
         """
         SELECT count(*)
-        FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND wait_event_type = 'Lock'
-          AND wait_event = 'advisory'
-          AND query ILIKE '%pg_advisory_xact_lock%'
+        FROM pg_locks
+        WHERE locktype = 'advisory'
+          AND granted = false
         """
     )
 
@@ -102,8 +109,7 @@ def _run_concurrent_duplicate_requests(
         monkeypatch,
         *,
         service_method: str,
-        path: str,
-        payload: dict | None,
+        request_factory,
         idempotency_key: str,
 ):
     first_operation_entered = Event()
@@ -122,53 +128,34 @@ def _run_concurrent_duplicate_requests(
         pause_first_operation,
     )
 
-    def override_get_db():
-        db = Session(
-            engine,
-            autoflush=False,
-            expire_on_commit=False,
-        )
-        try:
-            yield db
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-
-    previous_override = app.dependency_overrides.get(get_db)
-    app.dependency_overrides[get_db] = override_get_db
-
     def send_request():
-        with TestClient(app) as client:
-            kwargs = {
-                "headers": {"Idempotency-Key": idempotency_key},
-            }
-            if payload is not None:
-                kwargs["json"] = payload
-            return client.post(path, **kwargs)
+        with Session(
+                engine,
+                autoflush=False,
+                expire_on_commit=False,
+        ) as db:
+            return request_factory(db)
 
-    try:
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            first = executor.submit(send_request)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(send_request)
+        second = None
+
+        try:
             assert first_operation_entered.wait(timeout=10), (
                 "The first request did not reach the payment operation."
             )
 
             second = executor.submit(send_request)
             _wait_for_advisory_lock(engine)
+        finally:
+            # Always release the first transaction before the executor waits
+            # for worker shutdown, including when the lock assertion fails.
             release_first_operation.set()
 
-            first_response = first.result(timeout=20)
-            second_response = second.result(timeout=20)
-            return first_response, second_response
-    finally:
-        release_first_operation.set()
-        if previous_override is None:
-            app.dependency_overrides.pop(get_db, None)
-        else:
-            app.dependency_overrides[get_db] = previous_override
-
+        first_result = first.result(timeout=20)
+        assert second is not None
+        second_result = second.result(timeout=20)
+        return first_result, second_result
 
 def _cleanup_payment_state(engine, card_id: str, key: str) -> None:
     with Session(engine) as db:
@@ -230,22 +217,29 @@ def test_concurrent_duplicate_authorizations_execute_once(
     key = f"concurrent-auth-{uuid4()}"
 
     try:
+        def request_factory(db):
+            return authorize_transaction(
+                request=AuthorizeRequest(
+                    card_id=card_id,
+                    amount=Decimal("1000.00"),
+                    merchant_id="merchant-idempotency-test",
+                ),
+                x_simulate_failure=None,
+                idempotency_key=key,
+                correlation_id=None,
+                db=db,
+            )
+
         first, second = _run_concurrent_duplicate_requests(
             test_engine,
             monkeypatch,
             service_method="authorize",
-            path="/api/v1/transactions/authorize",
-            payload={
-                "card_id": card_id,
-                "amount": "1000.00",
-                "merchant_id": "merchant-idempotency-test",
-            },
+            request_factory=request_factory,
             idempotency_key=key,
         )
 
-        assert first.status_code == second.status_code == 200
-        assert first.json() == second.json()
-        transaction_id = first.json()["transaction_id"]
+        assert first == second
+        transaction_id = first["transaction_id"]
 
         with Session(test_engine) as db:
             card = db.get(CardDB, card_id)
@@ -275,17 +269,27 @@ def test_concurrent_duplicate_captures_execute_once(
     key = f"concurrent-capture-{uuid4()}"
 
     try:
+        def request_factory(db):
+            return capture_transaction(
+                transaction_id=transaction_id,
+                request=CaptureRequest(
+                    capture_amount=Decimal("700.00"),
+                ),
+                x_simulate_failure=None,
+                idempotency_key=key,
+                correlation_id=None,
+                db=db,
+            )
+
         first, second = _run_concurrent_duplicate_requests(
             test_engine,
             monkeypatch,
             service_method="capture",
-            path=f"/api/v1/transactions/{transaction_id}/capture",
-            payload={"capture_amount": "700.00"},
+            request_factory=request_factory,
             idempotency_key=key,
         )
 
-        assert first.status_code == second.status_code == 200
-        assert first.json() == second.json()
+        assert first == second
 
         with Session(test_engine) as db:
             transaction = db.get(TransactionDB, transaction_id)
@@ -319,17 +323,24 @@ def test_concurrent_duplicate_settlements_execute_once(
     key = f"concurrent-settlement-{uuid4()}"
 
     try:
+        def request_factory(db):
+            return settle_transaction(
+                transaction_id=transaction_id,
+                x_simulate_failure=None,
+                idempotency_key=key,
+                correlation_id=None,
+                db=db,
+            )
+
         first, second = _run_concurrent_duplicate_requests(
             test_engine,
             monkeypatch,
             service_method="settle",
-            path=f"/api/v1/transactions/{transaction_id}/settle",
-            payload=None,
+            request_factory=request_factory,
             idempotency_key=key,
         )
 
-        assert first.status_code == second.status_code == 200
-        assert first.json() == second.json()
+        assert first == second
 
         with Session(test_engine) as db:
             transaction = db.get(TransactionDB, transaction_id)
@@ -363,17 +374,27 @@ def test_concurrent_duplicate_refunds_execute_once(
     key = f"concurrent-refund-{uuid4()}"
 
     try:
+        def request_factory(db):
+            return refund_transaction(
+                transaction_id=transaction_id,
+                request=RefundRequest(
+                    refund_amount=Decimal("400.00"),
+                ),
+                x_simulate_failure=None,
+                idempotency_key=key,
+                correlation_id=None,
+                db=db,
+            )
+
         first, second = _run_concurrent_duplicate_requests(
             test_engine,
             monkeypatch,
             service_method="refund",
-            path=f"/api/v1/transactions/{transaction_id}/refund",
-            payload={"refund_amount": "400.00"},
+            request_factory=request_factory,
             idempotency_key=key,
         )
 
-        assert first.status_code == second.status_code == 200
-        assert first.json() == second.json()
+        assert first == second
 
         with Session(test_engine) as db:
             transaction = db.get(TransactionDB, transaction_id)

@@ -281,7 +281,12 @@ def store_idempotency_result(
         # representation while preserving exact decimal values as strings.
         response=jsonable_encoder(
             response,
-            custom_encoder={Decimal: str},
+            custom_encoder={
+                Decimal: str,
+                datetime: lambda value: (
+                    value.isoformat().replace("+00:00", "Z")
+                ),
+            },
         ),
     )
 
