@@ -9,6 +9,7 @@ def production_environment(**overrides):
         "DATABASE_URL": (
             "postgresql+psycopg://payguard:secret@localhost/payguard"
         ),
+        "PAYGUARD_API_KEY": "s" * 40,
         "PAYGUARD_ADMIN_API_KEY": "p" * 40,
     }
     values.update(overrides)
@@ -22,12 +23,22 @@ def test_production_requires_explicit_database_and_admin_credentials():
             "PAYGUARD_ADMIN_API_KEY": "p" * 40,
         })
 
+    with pytest.raises(RuntimeError, match="PAYGUARD_API_KEY"):
+        load_settings({
+            "PAYGUARD_ENV": "production",
+            "DATABASE_URL": (
+                "postgresql+psycopg://payguard:secret@localhost/payguard"
+            ),
+            "PAYGUARD_ADMIN_API_KEY": "p" * 40,
+        })
+
     with pytest.raises(RuntimeError, match="PAYGUARD_ADMIN_API_KEY"):
         load_settings({
             "PAYGUARD_ENV": "production",
             "DATABASE_URL": (
                 "postgresql+psycopg://payguard:secret@localhost/payguard"
             ),
+            "PAYGUARD_API_KEY": "s" * 40,
         })
 
 

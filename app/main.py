@@ -61,6 +61,33 @@ from app.services.payment_service import PaymentService
 # Application
 # ============================================================================
 
+def require_service_access(
+        x_api_key: Optional[str] = Header(
+            default=None,
+            alias="X-API-Key",
+        ),
+) -> None:
+    """Require the service key for business and dashboard API access."""
+    expected = settings.service_api_key
+
+    # Local development and isolated tests may run without a shared key.
+    if settings.environment in {"development", "test"} and expected is None:
+        return
+
+    if expected is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Service API access is not configured",
+        )
+
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid service credentials",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+
 logger = logging.getLogger("payguard")
 
 app = FastAPI(
@@ -75,6 +102,7 @@ allowed_headers = [
     "Content-Type",
     "Idempotency-Key",
     "X-Correlation-ID",
+    "X-API-Key",
     "X-Admin-API-Key",
     "X-Test-Reset-Token",
 ]
@@ -90,7 +118,10 @@ app.add_middleware(
     max_age=600,
 )
 
-app.include_router(dashboard_router)
+app.include_router(
+    dashboard_router,
+    dependencies=[Depends(require_service_access)],
+)
 
 
 @app.exception_handler(RequestValidationError)
@@ -446,6 +477,7 @@ def translate_payment_error(
     "/api/v1/cards",
     response_model=Card,
     status_code=201,
+    dependencies=[Depends(require_service_access)],
 )
 def issue_card(
         request: CardCreateRequest,
@@ -490,7 +522,10 @@ def issue_card(
 # Authorization
 # ============================================================================
 
-@app.post("/api/v1/transactions/authorize")
+@app.post(
+    "/api/v1/transactions/authorize",
+    dependencies=[Depends(require_service_access)],
+)
 def authorize_transaction(
         request: AuthorizeRequest,
         x_simulate_failure: Optional[str] = Header(default=None),
@@ -621,7 +656,10 @@ def authorize_transaction(
 # Capture
 # ============================================================================
 
-@app.post("/api/v1/transactions/{transaction_id}/capture")
+@app.post(
+    "/api/v1/transactions/{transaction_id}/capture",
+    dependencies=[Depends(require_service_access)],
+)
 def capture_transaction(
         transaction_id: str,
         request: CaptureRequest,
@@ -732,7 +770,10 @@ def capture_transaction(
 # Settlement
 # ============================================================================
 
-@app.post("/api/v1/transactions/{transaction_id}/settle")
+@app.post(
+    "/api/v1/transactions/{transaction_id}/settle",
+    dependencies=[Depends(require_service_access)],
+)
 def settle_transaction(
         transaction_id: str,
         x_simulate_failure: Optional[str] = Header(default=None),
@@ -831,7 +872,10 @@ def settle_transaction(
 # Refund
 # ============================================================================
 
-@app.post("/api/v1/transactions/{transaction_id}/refund")
+@app.post(
+    "/api/v1/transactions/{transaction_id}/refund",
+    dependencies=[Depends(require_service_access)],
+)
 def refund_transaction(
         transaction_id: str,
         request: RefundRequest,
@@ -940,7 +984,10 @@ def refund_transaction(
 # Transaction Lookup
 # ============================================================================
 
-@app.get("/api/v1/transactions/{transaction_id}")
+@app.get(
+    "/api/v1/transactions/{transaction_id}",
+    dependencies=[Depends(require_service_access)],
+)
 def get_transaction(
         transaction_id: str,
         payment_service: PaymentService = Depends(get_payment_service),

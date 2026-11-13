@@ -8,6 +8,53 @@ from app import main
 from app.config import settings
 
 
+def test_service_key_protects_business_and_dashboard_apis(
+        client,
+        monkeypatch,
+):
+    service_key = "s" * 40
+    monkeypatch.setattr(
+        main,
+        "settings",
+        replace(
+            settings,
+            environment="production",
+            service_api_key=service_key,
+        ),
+    )
+
+    missing_read = client.get("/api/v1/dashboard/summary")
+    invalid_write = client.post(
+        "/api/v1/cards",
+        json={
+            "cardholder_name": "Synthetic Test User",
+            "network": "VISA",
+            "initial_balance": "100.00",
+            "expiry_date": "12/2030",
+        },
+        headers={"X-API-Key": "wrong-key"},
+    )
+    valid_read = client.get(
+        "/api/v1/dashboard/summary",
+        headers={"X-API-Key": service_key},
+    )
+    valid_write = client.post(
+        "/api/v1/cards",
+        json={
+            "cardholder_name": "Synthetic Test User",
+            "network": "VISA",
+            "initial_balance": "100.00",
+            "expiry_date": "12/2030",
+        },
+        headers={"X-API-Key": service_key},
+    )
+
+    assert missing_read.status_code == 401
+    assert invalid_write.status_code == 401
+    assert valid_read.status_code == 200
+    assert valid_write.status_code == 201
+
+
 def test_audit_routes_require_admin_key_outside_test_environment(
         client,
         monkeypatch,

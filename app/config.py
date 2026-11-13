@@ -15,6 +15,7 @@ _ALLOWED_ENVIRONMENTS = frozenset({"development", "test", "production"})
 class AppSettings:
     environment: str
     cors_origins: tuple[str, ...]
+    service_api_key: str | None
     admin_api_key: str | None
     enable_test_endpoints: bool
     test_reset_token: str | None
@@ -80,6 +81,7 @@ def load_settings(
         )
 
     database_url = (values.get("DATABASE_URL") or "").strip()
+    service_api_key = (values.get("PAYGUARD_API_KEY") or "").strip() or None
     admin_api_key = (values.get("PAYGUARD_ADMIN_API_KEY") or "").strip() or None
 
     if environment == "production":
@@ -87,11 +89,19 @@ def load_settings(
             raise RuntimeError(
                 "DATABASE_URL must be explicitly configured in production"
             )
+        if not service_api_key:
+            raise RuntimeError(
+                "PAYGUARD_API_KEY must be configured in production"
+            )
         if not admin_api_key:
             raise RuntimeError(
                 "PAYGUARD_ADMIN_API_KEY must be configured in production"
             )
 
+    if service_api_key is not None and len(service_api_key) < 32:
+        raise RuntimeError(
+            "PAYGUARD_API_KEY must contain at least 32 characters"
+        )
     if admin_api_key is not None and len(admin_api_key) < 32:
         raise RuntimeError(
             "PAYGUARD_ADMIN_API_KEY must contain at least 32 characters"
@@ -126,6 +136,7 @@ def load_settings(
     return AppSettings(
         environment=environment,
         cors_origins=cors_origins,
+        service_api_key=service_api_key,
         admin_api_key=admin_api_key,
         enable_test_endpoints=enable_test_endpoints,
         test_reset_token=test_reset_token,
