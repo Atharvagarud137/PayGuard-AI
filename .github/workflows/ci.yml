@@ -101,6 +101,8 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://payguard:payguard_test_password@localhost:5432/payguard_test
       PAYGUARD_ENV: test
+      PAYGUARD_ENABLE_TEST_ENDPOINTS: "true"
+      PAYGUARD_TEST_RESET_TOKEN: payguard-test-reset-token-2026-phase4
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
 

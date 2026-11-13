@@ -5,6 +5,11 @@ import pytest
 
 # Ensure the app registers test-only routes before app.main is imported.
 os.environ.setdefault("PAYGUARD_ENV", "test")
+os.environ.setdefault("PAYGUARD_ENABLE_TEST_ENDPOINTS", "true")
+os.environ.setdefault(
+    "PAYGUARD_TEST_RESET_TOKEN",
+    "payguard-test-reset-token-2026-phase4",
+)
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine

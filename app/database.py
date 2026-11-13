@@ -3,6 +3,7 @@ import os
 from typing import Generator
 from urllib.parse import urlsplit
 
+from app.config import settings
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -24,10 +25,15 @@ def _get_database_url() -> str:
     DATABASE_URL should be supplied through the environment for deployments.
     The default is intended only for local development.
     """
-    database_url = os.getenv(
-        "DATABASE_URL",
-        DEFAULT_DATABASE_URL,
-    ).strip()
+    configured_url = os.getenv("DATABASE_URL")
+    if configured_url is None or not configured_url.strip():
+        if settings.environment == "production":
+            raise RuntimeError(
+                "DATABASE_URL must be explicitly configured in production"
+            )
+        database_url = DEFAULT_DATABASE_URL
+    else:
+        database_url = configured_url.strip()
 
     if not database_url:
         raise RuntimeError("DATABASE_URL must not be empty")

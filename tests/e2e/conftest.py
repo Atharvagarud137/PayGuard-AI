@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from httpx import Client
 from playwright.sync_api import Page
@@ -48,7 +50,13 @@ def reset_backend_state(
             timeout=10.0,
     ) as client:
         response = client.post(
-            "/api/v1/test/reset"
+            "/api/v1/test/reset",
+            headers={
+                "X-Test-Reset-Token": os.getenv(
+                    "PAYGUARD_TEST_RESET_TOKEN",
+                    "payguard-test-reset-token-2026-phase4",
+                )
+            },
         )
 
     assert response.status_code == 200, (

@@ -5,7 +5,7 @@ from enum import Enum
 from typing import List, Optional
 import uuid
 
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 
 # ============================================================================
@@ -29,6 +29,12 @@ def validate_money_amount(value: Decimal) -> Decimal:
         )
 
     return value
+
+
+class StrictRequestModel(BaseModel):
+    """Base class that rejects undeclared request fields."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # ============================================================================
@@ -78,7 +84,7 @@ class AuditEventType(str, Enum):
 # Card Models
 # ============================================================================
 
-class CardCreateRequest(BaseModel):
+class CardCreateRequest(StrictRequestModel):
     cardholder_name: str
     network: CardNetwork
 
@@ -145,7 +151,7 @@ class Card(BaseModel):
 # Transaction Request Models
 # ============================================================================
 
-class AuthorizeRequest(BaseModel):
+class AuthorizeRequest(StrictRequestModel):
     card_id: str
     amount: Decimal = Field(
         gt=Decimal("0"),
@@ -159,7 +165,7 @@ class AuthorizeRequest(BaseModel):
         return validate_money_amount(value)
 
 
-class CaptureRequest(BaseModel):
+class CaptureRequest(StrictRequestModel):
     capture_amount: Decimal = Field(
         gt=Decimal("0"),
         allow_inf_nan=False,
@@ -171,7 +177,7 @@ class CaptureRequest(BaseModel):
         return validate_money_amount(value)
 
 
-class RefundRequest(BaseModel):
+class RefundRequest(StrictRequestModel):
     refund_amount: Decimal = Field(
         gt=Decimal("0"),
         allow_inf_nan=False,

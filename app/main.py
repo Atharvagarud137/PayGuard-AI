@@ -1,19 +1,23 @@
-import os
 import hashlib
+import logging
 import random
+import secrets
 import string
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.database_models import (
     AuditEventDB,
@@ -57,23 +61,75 @@ from app.services.payment_service import PaymentService
 # Application
 # ============================================================================
 
+logger = logging.getLogger("payguard")
+
 app = FastAPI(
     title="PayGuard AI - Mock Payment Gateway",
     version="1.0.0",
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
+
+allowed_headers = [
+    "Content-Type",
+    "Idempotency-Key",
+    "X-Correlation-ID",
+    "X-Admin-API-Key",
+    "X-Test-Reset-Token",
+]
+if settings.failure_simulation_enabled:
+    allowed_headers.append("X-Simulate-Failure")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=list(settings.cors_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=allowed_headers,
+    max_age=600,
 )
 
 app.include_router(dashboard_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+        request: Request,
+        exc: RequestValidationError,
+) -> JSONResponse:
+    """Return validation details without echoing submitted field values."""
+    safe_errors = [
+        {
+            "loc": list(error.get("loc", ())),
+            "msg": error.get("msg", "Invalid request"),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={"detail": safe_errors},
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(
+        request: Request,
+        exc: Exception,
+) -> JSONResponse:
+    """Log only safe error metadata and return a generic client response."""
+    route = request.scope.get("route")
+    route_template = getattr(route, "path", "unmatched")
+    logger.error(
+        "Unhandled application error type=%s route=%s",
+        type(exc).__name__,
+        route_template,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 # ============================================================================
@@ -130,10 +186,38 @@ def reset_test_state(
 
     return {"message": "Test state reset successfully"}
 
-# Register the destructive test helper only in explicit test environments.
-# The endpoint is absent from normal development and production deployments.
-if os.getenv("PAYGUARD_ENV", "development").strip().lower() == "test":
-    app.post("/api/v1/test/reset")(reset_test_state)
+def require_test_reset_token(
+        x_test_reset_token: Optional[str] = Header(
+            default=None,
+            alias="X-Test-Reset-Token",
+        ),
+) -> None:
+    """Require the dedicated token for the destructive test-only endpoint."""
+    expected = settings.test_reset_token
+    if (
+        settings.environment != "test"
+        or not settings.enable_test_endpoints
+        or expected is None
+    ):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if (
+        not x_test_reset_token
+        or not secrets.compare_digest(x_test_reset_token, expected)
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid test reset credentials",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+
+# Register the destructive helper only when explicitly enabled in test mode.
+if settings.enable_test_endpoints:
+    app.post(
+        "/api/v1/test/reset",
+        dependencies=[Depends(require_test_reset_token)],
+    )(reset_test_state)
 
 # ============================================================================
 # Shared Helpers
@@ -150,7 +234,13 @@ def get_correlation_id(
 ) -> str:
     """Use the supplied correlation ID or generate a new UUID."""
     if correlation_id and correlation_id.strip():
-        return correlation_id.strip()
+        value = correlation_id.strip()
+        if len(value) > 128:
+            raise HTTPException(
+                status_code=422,
+                detail="X-Correlation-ID must be 128 characters or fewer",
+            )
+        return value
     return str(uuid.uuid4())
 
 
@@ -158,11 +248,16 @@ def check_simulated_failure(
         x_simulate_failure: Optional[str],
 ) -> None:
     """Trigger deterministic failures for failure-handling tests."""
-    failure = (
-        x_simulate_failure.strip().upper()
-        if x_simulate_failure
-        else None
-    )
+    if not x_simulate_failure:
+        return
+
+    if not settings.failure_simulation_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Failure simulation is disabled in this environment",
+        )
+
+    failure = x_simulate_failure.strip().upper()
 
     failures = {
         "TIMEOUT": (504, "Simulated timeout occurred"),
@@ -866,7 +961,40 @@ def get_transaction(
 # Audit Lookup
 # ============================================================================
 
-@app.get("/api/v1/audit/transactions/{transaction_id}")
+def require_admin_access(
+        x_admin_api_key: Optional[str] = Header(
+            default=None,
+            alias="X-Admin-API-Key",
+        ),
+) -> None:
+    """Authorize access to operational audit data with a service API key."""
+    expected = settings.admin_api_key
+
+    # API tests run in an explicitly isolated test environment.
+    if settings.environment == "test" and expected is None:
+        return
+
+    if expected is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Administrative access is not configured",
+        )
+
+    if (
+        not x_admin_api_key
+        or not secrets.compare_digest(x_admin_api_key, expected)
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid administrative credentials",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+
+@app.get(
+    "/api/v1/audit/transactions/{transaction_id}",
+    dependencies=[Depends(require_admin_access)],
+)
 def get_transaction_audit_events(
         transaction_id: str,
         payment_service: PaymentService = Depends(get_payment_service),
@@ -884,7 +1012,10 @@ def get_transaction_audit_events(
     return audit_service.list_by_transaction(transaction_id)
 
 
-@app.get("/api/v1/audit/correlation/{correlation_id}")
+@app.get(
+    "/api/v1/audit/correlation/{correlation_id}",
+    dependencies=[Depends(require_admin_access)],
+)
 def get_correlation_audit_events(
         correlation_id: str,
         audit_service: AuditService = Depends(get_audit_service),
