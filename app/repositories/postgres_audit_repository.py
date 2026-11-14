@@ -25,6 +25,11 @@ class PostgresAuditRepository(AuditRepositoryProtocol):
 
     def add(self, event: AuditEvent) -> None:
         """Append an audit event to the globally ordered hash chain."""
+        # Flush payment rows first so an audit row referencing a newly created
+        # transaction cannot reach PostgreSQL before its foreign-key parent.
+        # The flush remains inside the caller's transaction and is rolled back
+        # with the payment operation if any later write fails.
+        self.db.flush()
         self.db.execute(
             text(
                 "SELECT pg_advisory_xact_lock("

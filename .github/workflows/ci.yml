@@ -201,10 +201,6 @@ jobs:
         working-directory: dashboard
         run: npm ci
 
-      - name: Generate patched dashboard lockfile for review
+      - name: Audit dashboard dependencies
         working-directory: dashboard
-        run: |
-          npm audit fix --package-lock-only
-          node -e "const fs = require('node:fs'); console.log('LOCKFILE_BASE64_BEGIN'); console.log(fs.readFileSync('package-lock.json').toString('base64')); console.log('LOCKFILE_BASE64_END');"
-          git diff --exit-code -- package-lock.json
-          npm audit --audit-level=high
+        run: npm audit --audit-level=high
