@@ -201,7 +201,7 @@ jobs:
         working-directory: dashboard
         run: npm ci
 
-      - name: Check and resolve dashboard security updates
+      - name: Generate patched dashboard lockfile for review
         working-directory: dashboard
         run: |
           npm audit fix --package-lock-only
