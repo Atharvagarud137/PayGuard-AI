@@ -26,3 +26,10 @@ def test_redacts_bearer_tokens_and_admin_credentials():
 
     assert "eyJhbGciOiJub25lIn0" not in redacted
     assert "admin-secret" not in redacted
+
+
+
+def test_redaction_preserves_uuid_identifiers():
+    identifier = "86fb6ec0-85c0-4fdb-aebe-d144d073dc20"
+
+    assert redact_sensitive_text(identifier) == identifier

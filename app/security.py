@@ -5,6 +5,9 @@ from typing import Any
 from starlette.responses import JSONResponse
 
 
+_UUID_PATTERN = re.compile(
+    r"(?i)\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b"
+)
 _PAN_PATTERN = re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
 _SECRET_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(api[_-]?key|admin[_-]?api[_-]?key|test[_-]?reset[_-]?token|"
@@ -17,12 +20,22 @@ _BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 def redact_sensitive_text(value: Any) -> str:
     """Redact payment-card-like numbers and common credential formats."""
     text = str(value)
+    protected_uuids: list[str] = []
+
+    def protect_uuid(match: re.Match[str]) -> str:
+        protected_uuids.append(match.group(0))
+        return f"__PAYGUARD_UUID_{len(protected_uuids) - 1}__"
+
+    text = _UUID_PATTERN.sub(protect_uuid, text)
     text = _BEARER_PATTERN.sub("Bearer [REDACTED]", text)
     text = _PAN_PATTERN.sub("[REDACTED-PAN]", text)
-    return _SECRET_ASSIGNMENT_PATTERN.sub(
+    text = _SECRET_ASSIGNMENT_PATTERN.sub(
         lambda match: f"{match.group(1)}{match.group(2)}[REDACTED]",
         text,
     )
+    for index, identifier in enumerate(protected_uuids):
+        text = text.replace(f"__PAYGUARD_UUID_{index}__", identifier)
+    return text
 
 
 class RedactingFilter(logging.Filter):
