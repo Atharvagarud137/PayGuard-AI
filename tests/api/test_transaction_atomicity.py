@@ -4,7 +4,7 @@ from threading import Barrier
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database_models import (
@@ -184,6 +184,12 @@ def _seed_card(factory, card_id: str, balance: Decimal) -> None:
 def _cleanup_card(factory, card_id: str) -> None:
     """Remove committed records created by an independent-session test."""
     with factory() as db:
+        db.execute(
+            text(
+                "SELECT set_config("
+                "'payguard.allow_audit_delete', 'on', true)"
+            )
+        )
         transaction_ids = select(TransactionDB.id).where(
             TransactionDB.card_id == card_id
         )

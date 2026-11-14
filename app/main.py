@@ -222,7 +222,6 @@ def reset_test_state(
             text(
                 "SELECT set_config("
                 "'payguard.allow_audit_delete', 'on', true)"
-                ")"
             )
         )
 

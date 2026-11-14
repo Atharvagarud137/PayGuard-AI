@@ -17,12 +17,12 @@ _BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 def redact_sensitive_text(value: Any) -> str:
     """Redact payment-card-like numbers and common credential formats."""
     text = str(value)
+    text = _BEARER_PATTERN.sub("Bearer [REDACTED]", text)
     text = _PAN_PATTERN.sub("[REDACTED-PAN]", text)
-    text = _SECRET_ASSIGNMENT_PATTERN.sub(
+    return _SECRET_ASSIGNMENT_PATTERN.sub(
         lambda match: f"{match.group(1)}{match.group(2)}[REDACTED]",
         text,
     )
-    return _BEARER_PATTERN.sub("Bearer [REDACTED]", text)
 
 
 class RedactingFilter(logging.Filter):
