@@ -187,7 +187,7 @@ def test_audit_integrity_endpoint_reports_a_valid_chain(
     assert response.json()["first_invalid_sequence"] is None
 
 
-def test_audit_rows_reject_updates_and_deletes(
+def test_audit_rows_reject_updates_deletes_and_truncate(
         client,
         issued_card,
         db_session,
@@ -229,6 +229,10 @@ def test_audit_rows_reject_updates_and_deletes(
                 text("DELETE FROM audit_events WHERE id=:event_id"),
                 {"event_id": audit_event_id},
             )
+
+    with pytest.raises(DBAPIError):
+        with db_session.begin_nested():
+            db_session.execute(text("TRUNCATE TABLE audit_events"))
 
 
 def test_audit_hash_chain_detects_out_of_band_tampering(
