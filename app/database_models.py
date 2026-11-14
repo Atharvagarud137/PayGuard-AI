@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -342,6 +343,21 @@ class AuditEventDB(Base):
         nullable=True,
     )
 
+    chain_sequence: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+    )
+
+    previous_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    event_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -355,6 +371,10 @@ class AuditEventDB(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "chain_sequence",
+            name="uq_audit_events_chain_sequence",
+        ),
         Index(
             "ix_audit_events_transaction_created",
             "transaction_id",

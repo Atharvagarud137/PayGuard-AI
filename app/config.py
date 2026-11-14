@@ -21,6 +21,7 @@ class AppSettings:
     test_reset_token: str | None
     docs_enabled: bool
     failure_simulation_enabled: bool
+    max_request_bytes: int
 
 
 def _parse_bool(value: str, *, name: str) -> bool:
@@ -67,6 +68,25 @@ def _parse_cors_origins(
             origins.append(normalized)
 
     return tuple(origins)
+
+
+def _parse_positive_int(
+        value: str,
+        *,
+        name: str,
+        minimum: int,
+        maximum: int,
+) -> int:
+    try:
+        parsed = int(value.strip())
+    except (AttributeError, ValueError) as exc:
+        raise RuntimeError(f"{name} must be an integer") from exc
+
+    if parsed < minimum or parsed > maximum:
+        raise RuntimeError(
+            f"{name} must be between {minimum} and {maximum}"
+        )
+    return parsed
 
 
 def load_settings(
@@ -128,6 +148,13 @@ def load_settings(
             "when test endpoints are enabled"
         )
 
+    max_request_bytes = _parse_positive_int(
+        values.get("PAYGUARD_MAX_REQUEST_BYTES", "65536"),
+        name="PAYGUARD_MAX_REQUEST_BYTES",
+        minimum=1024,
+        maximum=1048576,
+    )
+
     cors_origins = _parse_cors_origins(
         values.get("PAYGUARD_CORS_ORIGINS"),
         environment=environment,
@@ -142,6 +169,7 @@ def load_settings(
         test_reset_token=test_reset_token,
         docs_enabled=environment != "production",
         failure_simulation_enabled=environment in {"development", "test"},
+        max_request_bytes=max_request_bytes,
     )
 
 

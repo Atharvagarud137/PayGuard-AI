@@ -79,11 +79,19 @@ def test_audit_routes_require_admin_key_outside_test_environment(
         "/api/v1/audit/correlation/security-test",
         headers={"X-Admin-API-Key": admin_key},
     )
+    integrity_missing = client.get("/api/v1/audit/integrity")
+    integrity_valid = client.get(
+        "/api/v1/audit/integrity",
+        headers={"X-Admin-API-Key": admin_key},
+    )
 
     assert missing.status_code == 401
     assert invalid.status_code == 401
     assert valid.status_code == 200
     assert valid.json() == []
+    assert integrity_missing.status_code == 401
+    assert integrity_valid.status_code == 200
+    assert integrity_valid.json()["valid"] is True
 
 
 def test_test_reset_endpoint_requires_dedicated_token(client):
@@ -178,3 +186,52 @@ def test_unexpected_errors_return_generic_details_without_echoing_secrets(
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error"}
     assert secret_marker not in response.text
+
+
+
+def test_security_headers_are_present(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["permissions-policy"] == (
+        "camera=(), microphone=(), geolocation=()"
+    )
+
+
+def test_api_responses_are_not_cached(client):
+    response = client.get("/api/v1/dashboard/summary")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_oversized_request_body_is_rejected_before_validation(client):
+    response = client.post(
+        "/api/v1/cards",
+        content=b"x" * (settings.max_request_bytes + 1),
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body is too large"}
+
+
+def test_application_logs_redact_card_numbers_and_credentials(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="payguard"):
+        main.logger.warning(
+            "Rejected PAN=%s CVV=%s X-API-Key=%s",
+            "4111 1111 1111 1111",
+            "123",
+            "service-secret-marker",
+        )
+
+    assert "4111 1111 1111 1111" not in caplog.text
+    assert "CVV=123" not in caplog.text
+    assert "service-secret-marker" not in caplog.text
+    assert "[REDACTED-PAN]" in caplog.text
+    assert "[REDACTED]" in caplog.text

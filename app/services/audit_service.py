@@ -4,6 +4,7 @@ from typing import Any, List, Optional
 
 from app.models import AuditEvent, AuditEventType
 from app.repositories.interfaces import AuditRepositoryProtocol
+from app.security import redact_sensitive_text
 
 
 class AuditService:
@@ -65,16 +66,22 @@ class AuditService:
                 str(amount),
             )
 
+        safe_text = lambda value: (
+            redact_sensitive_text(value)
+            if value is not None
+            else None
+        )
+
         event = AuditEvent(
             event_type=event_type,
-            action=action,
-            outcome=outcome,
-            correlation_id=correlation_id,
-            transaction_id=transaction_id,
-            card_id=card_id,
-            merchant_id=merchant_id,
+            action=redact_sensitive_text(action),
+            outcome=redact_sensitive_text(outcome),
+            correlation_id=safe_text(correlation_id),
+            transaction_id=safe_text(transaction_id),
+            card_id=safe_text(card_id),
+            merchant_id=safe_text(merchant_id),
             amount=normalized_amount,
-            detail=detail,
+            detail=safe_text(detail),
             timestamp=datetime.now(timezone.utc),
         )
 
@@ -124,3 +131,13 @@ class AuditService:
         return self.repository.list_by_correlation_id(
             correlation_id,
         )
+
+    def verify_integrity(self) -> dict:
+        """Return the repository's persistent audit-chain integrity result."""
+        verifier = getattr(self.repository, "verify_integrity", None)
+        if verifier is None:
+            raise NotImplementedError(
+                "The configured audit repository does not support "
+                "persistent integrity verification."
+            )
+        return verifier()

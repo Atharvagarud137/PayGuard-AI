@@ -13,7 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,11 @@ from app.repositories.postgres_transaction_repository import (
 from app.routes.dashboard import router as dashboard_router
 from app.services.audit_service import AuditService
 from app.services.payment_service import PaymentService
+from app.security import (
+    RedactingFilter,
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 
 # ============================================================================
@@ -89,6 +94,7 @@ def require_service_access(
 
 
 logger = logging.getLogger("payguard")
+logger.addFilter(RedactingFilter())
 
 app = FastAPI(
     title="PayGuard AI - Mock Payment Gateway",
@@ -117,6 +123,11 @@ app.add_middleware(
     allow_headers=allowed_headers,
     max_age=600,
 )
+app.add_middleware(
+    RequestSizeLimitMiddleware,
+    max_bytes=settings.max_request_bytes,
+)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(
     dashboard_router,
@@ -204,6 +215,17 @@ def reset_test_state(
     This destructive endpoint must not be exposed in production.
     """
     try:
+        # The destructive reset route exists only in explicitly enabled
+        # test mode. This transaction-local flag is the sole delete exception
+        # in the PostgreSQL append-only audit trigger.
+        db.execute(
+            text(
+                "SELECT set_config("
+                "'payguard.allow_audit_delete', 'on', true)"
+                ")"
+            )
+        )
+
         # Delete dependent records before their parent records.
         db.execute(delete(IdempotencyRecordDB))
         db.execute(delete(AuditEventDB))
@@ -1069,6 +1091,17 @@ def get_correlation_audit_events(
 ):
     """Retrieve audit events associated with a correlation ID."""
     return audit_service.list_by_correlation_id(correlation_id)
+
+
+@app.get(
+    "/api/v1/audit/integrity",
+    dependencies=[Depends(require_admin_access)],
+)
+def get_audit_integrity(
+        audit_service: AuditService = Depends(get_audit_service),
+) -> dict:
+    """Verify the append-only audit hash chain for administrative review."""
+    return audit_service.verify_integrity()
 
 
 # ============================================================================

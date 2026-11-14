@@ -95,3 +95,19 @@ def test_test_environment_can_explicitly_enable_protected_reset_route():
     assert settings.enable_test_endpoints is True
     assert settings.test_reset_token == "t" * 40
     assert settings.failure_simulation_enabled is True
+
+
+
+def test_max_request_bytes_is_configurable_with_safe_bounds():
+    settings = load_settings({
+        "PAYGUARD_ENV": "test",
+        "PAYGUARD_MAX_REQUEST_BYTES": "2048",
+    })
+
+    assert settings.max_request_bytes == 2048
+
+    with pytest.raises(RuntimeError, match="between 1024 and 1048576"):
+        load_settings({
+            "PAYGUARD_ENV": "test",
+            "PAYGUARD_MAX_REQUEST_BYTES": "512",
+        })

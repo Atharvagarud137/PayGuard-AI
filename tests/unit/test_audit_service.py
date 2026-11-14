@@ -192,3 +192,26 @@ def test_audit_event_does_not_require_raw_request_payload(service):
 
     assert event.audit_event_id is not None
     assert event.detail == "Request rejected"
+
+
+
+def test_audit_service_redacts_sensitive_values_before_persistence(service):
+    event = service.record(
+        event_type=AuditEventType.SECURITY,
+        action="AUTHORIZE",
+        outcome="FAILURE",
+        correlation_id="4111111111111111",
+        transaction_id="transaction-safe-001",
+        card_id="4111 1111 1111 1111",
+        merchant_id="merchant-001",
+        detail="Rejected X-API-Key=service-secret CVV=123",
+    )
+
+    serialized = str(event.model_dump())
+
+    assert "4111111111111111" not in serialized
+    assert "4111 1111 1111 1111" not in serialized
+    assert "service-secret" not in serialized
+    assert "CVV=123" not in serialized
+    assert "[REDACTED-PAN]" in serialized
+    assert "[REDACTED]" in serialized
