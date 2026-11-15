@@ -1,5 +1,8 @@
 # Playwright vs Selenium for PayGuard-AI
 
+> **Current project status (15 November 2026):** Playwright is the only implemented browser automation framework. The CI E2E job uses Chromium. Selenium is a comparison option only and is not a current project dependency or test suite.
+
+
 **Date:** 22 August 2026  
 **Project:** PayGuard-AI Mock Payment Gateway  
 **Primary test stack:** Python 3.11.9 + pytest  
@@ -62,7 +65,7 @@ The backend currently covers:
 - Simulated technical failures
 - Sensitive-data protections
 
-The current regression suite contains **92 passing tests**.
+The latest verified CI run (#39, 14 November 2026) recorded **142 passing Python unit/API tests** and **6 passing Playwright Chromium E2E tests**. The two suites run in separate GitHub Actions jobs; dependency audits also passed. See [the run](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045).
 
 Browser automation should therefore validate the actual user-facing workflows and UI-to-API integration rather than duplicate backend behavior already covered by API and unit tests.
 
@@ -816,7 +819,7 @@ Recording the decision prevents it from becoming undocumented team folklore.
 ```text
 docs/
 └── testing/
-    └── playwright-vs-selenium.md
+    └── playwright-vs-selenium-payguard-ai.md
 ```
 
 Add a short README reference:
@@ -828,7 +831,7 @@ PayGuard-AI uses pytest for unit and API-level testing and Playwright
 for browser-based end-to-end testing.
 
 See
-[`docs/testing/playwright-vs-selenium.md`](docs/testing/playwright-vs-selenium.md)
+[`docs/playwright-vs-selenium-payguard-ai.md`](docs/playwright-vs-selenium-payguard-ai.md)
 for the framework evaluation and architectural rationale.
 ```
 
@@ -872,7 +875,7 @@ the documented criteria provide a rational trigger for reevaluation.
 
 ## 24. Final Recommendation
 
-> **Use Playwright for PayGuard-AI's browser/E2E automation, keep the existing pytest API and unit tests, and document the decision as a testing architecture decision record in `docs/testing/playwright-vs-selenium.md`.**
+> **Use Playwright for PayGuard-AI's browser/E2E automation, keep the existing pytest API and unit tests, and document the decision as a testing architecture decision record in `docs/playwright-vs-selenium-payguard-ai.md`.**
 
 This gives the project modern browser automation without throwing away the 92-test backend regression suite that is already working.
 

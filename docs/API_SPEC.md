@@ -15,10 +15,12 @@ The API models a simplified payment transaction lifecycle covering:
 - Transaction lookup
 - Idempotent authorization
 - Idempotent capture
+- Idempotent settlement
+- Idempotent refund
 
-The API is implemented using FastAPI and is backed by the project's payment-domain, payment-service, repository, state-machine, audit, and storage layers.
+The API is implemented using FastAPI and backed by PostgreSQL repositories, the payment service, domain state machine, audit chain, and idempotency records. The API handler owns each request's database transaction.
 
-The API specification is also exposed automatically through FastAPI's OpenAPI implementation.
+The API specification is exposed through FastAPI OpenAPI in development and test environments. Swagger, ReDoc and OpenAPI routes are disabled in production.
 
 ---
 
@@ -44,13 +46,31 @@ http://localhost:8000/openapi.json
 
 for the raw OpenAPI specification.
 
-> HTTPS is not currently configured. The development API uses HTTP.
+> Local development uses HTTP. Production HTTPS termination is a deployment responsibility.
+
+## Authentication and access control
+
+Outside the explicitly keyless `development` and isolated `test` configurations:
+
+| API area | Required header |
+|---|---|
+| Business operations and dashboard API | `X-API-Key` |
+| Audit lookup and integrity endpoints | `X-Admin-API-Key` |
+| Test reset endpoint, only when enabled | `X-Test-Reset-Token` |
+
+Production requires `PAYGUARD_API_KEY` and `PAYGUARD_ADMIN_API_KEY`, each at least 32 characters. Key comparisons use constant-time comparison. These are shared API credentials, not per-user authentication or RBAC.
+
+The root `GET /` liveness endpoint is public. Test reset is not registered by default; it can only be enabled with `PAYGUARD_ENV=test`, `PAYGUARD_ENABLE_TEST_ENDPOINTS=true`, and a separate reset token. Failure simulation and OpenAPI documentation are disabled in production.
+
+## Synthetic payment-data boundary
+
+Card issuance creates a synthetic masked card identifier. Card-creation requests do not accept real PAN or CVV/CVC fields; undeclared fields are rejected. Never submit real cardholder data or production payment credentials.
 
 ---
 
 # Supported Card Networks
 
-The card issuance API validates the configured card-network values defined by the application's request model.
+The card issuance API validates the configured card-network values defined by the application's request model. It creates synthetic test records and a generated masked card identifier; it is not a card tokenization service.
 
 The currently supported networks are:
 
@@ -544,6 +564,17 @@ SETTLED
 
 The settlement tests verify successful settlement, invalid states, nonexistent transactions, repeated settlement, and simulated technical failures.
 
+## Settlement Idempotency
+
+Settlement accepts the optional `Idempotency-Key` header.
+
+- Same key and same transaction: the original settlement response is replayed.
+- Same key and a different transaction: HTTP 409 Conflict.
+- Different keys represent separate requests.
+- Without a key, the endpoint retains non-idempotent behavior.
+
+Concurrent requests sharing a key are serialized by a transaction-scoped PostgreSQL advisory lock. The payment mutation and stored response commit in the same database transaction.
+
 ---
 
 # 7. Refund
@@ -658,6 +689,17 @@ The API test suite verifies:
 * Fully refunded transactions
 * Zero refunds
 * Negative refunds
+
+## Refund Idempotency
+
+Refund accepts the optional `Idempotency-Key` header.
+
+- Same key and same transaction/refund amount: the original response is replayed.
+- Same key with a different transaction or refund amount: HTTP 409 Conflict.
+- Different keys represent separate requests.
+- Without a key, the endpoint retains non-idempotent behavior.
+
+Concurrent requests sharing a key are serialized by a transaction-scoped PostgreSQL advisory lock. The payment mutation and stored response commit in the same database transaction.
 
 ---
 
@@ -790,15 +832,13 @@ Example:
 }
 ```
 
-This endpoint is currently a simple application availability check rather than a complete dependency health/readiness check.
-
-A more comprehensive health and readiness model can be introduced when PostgreSQL, Docker services, and other external dependencies become part of the runtime architecture.
+This endpoint is a simple application liveness response, not a database dependency health/readiness check. PostgreSQL availability must be monitored separately.
 
 ---
 
 # Simulated Failure Injection
 
-The Mock Payment Gateway supports deterministic technical-failure simulation through the:
+The Mock Payment Gateway supports deterministic technical-failure simulation in development and test environments only through the:
 
 ```http
 X-Simulate-Failure
@@ -938,45 +978,21 @@ Storage
 
 # Idempotency Architecture
 
-Idempotency records are maintained by the application's storage layer.
+Idempotency records are persisted in PostgreSQL. Each record contains a unique key, deterministic request fingerprint and serialized original response.
 
-Each record contains:
+For a supplied key, the repository acquires a transaction-scoped PostgreSQL advisory lock. Requests using that key serialize until the current transaction commits or rolls back. The handler then either replays a matching stored response, rejects a fingerprint mismatch with HTTP 409, or executes the mutation and stores the response in the same transaction.
 
-```text
-Idempotency-Key
-      |
-      +---- request fingerprint
-      |
-      +---- original response
-```
-
-The storage implementation maintains these records separately from card and transaction state.
-
-This allows the API to distinguish:
-
-```text
-same key + same request
-```
-
-from:
-
-```text
-same key + different request
-```
-
-The original response is stored defensively so callers cannot mutate the persisted idempotency record accidentally.
-
-Idempotency currently covers authorization and capture operations.
+Idempotency covers authorization, capture, settlement and refund. The key remains optional; requests without one are not deduplicated. The unique database constraint is an additional safeguard against duplicate records.
 
 ---
 
 # Audit Events
 
-The application maintains a separate audit-event storage collection.
+The application stores audit events in PostgreSQL, independently from transaction lifecycle events. AuditService accepts explicit operational fields rather than arbitrary request payloads and applies redaction before persistence.
 
-Audit events are stored independently from payment transactions and are intended to represent operational and security history.
+Audit inserts are serialized into a sequence/hash chain. Each row stores its sequence, previous hash and event hash. Database triggers reject ordinary UPDATE, DELETE and TRUNCATE operations. The admin-protected integrity endpoint verifies sequence continuity and hashes.
 
-The storage layer uses defensive copies when persisting and retrieving audit events so callers cannot mutate stored audit records through external references.
+This is tamper-evident against ordinary application operations, not immutable against a database owner or superuser able to disable triggers or rewrite the chain.
 
 The audit test suite verifies:
 
@@ -1388,20 +1404,6 @@ AUTHORIZED REQUEST
    DECLINED
 ```
 
-The API currently provides the functional payment flow required for the reliability-focused development phase.
-
-The next architectural concerns should focus on:
-
-* Persistent storage
-* Concurrency
-* Durable transaction history
-* Monetary precision
-* Authentication
-* Rate limiting
-* Reliability
-* Expanded automated testing
-* AI-assisted failure analysis
-
-rather than adding more payment endpoints prematurely.
+The API currently provides the simulated payment flow and reliability controls described in this specification. Remaining deployment concerns include per-user identity/RBAC, API-key rotation, HTTPS termination, external secret management and gateway-level rate limiting. AI-assisted failure analysis remains planned. The application does not claim PCI DSS compliance or production payment capability.
 
 

@@ -1,5 +1,8 @@
 # PayGuard-AI — Context recovered from the shared ChatGPT conversation
 
+> **Historical document.** This file records decisions and repository state from earlier conversations, including the dated 2026-10-11 snapshot below. It is not the current implementation specification. The 15 November 2026 status update near the end supersedes earlier roadmap/status claims where they differ.
+
+
 > Source: <https://chatgpt.com/share/6ac60f89-cb60-83e8-840f-84e6531b79d9>
 > Recovered from the share page's server-rendered React Router *turbo-stream* payload and decoded with `turbo-stream@2.4.1`.
 
@@ -165,9 +168,7 @@ pointed JetBrains AI Assistant at it.** Diagnosis chain, in order:
 > `STORAGE_ENCRYPTION_KEY` value, pasted inline while debugging. Both are now permanently inside that
 > public share URL, so treat them as compromised: **rotate both**, and do not reuse them.
 >
-> For that reason the recovered transcript is a **local-only artifact** and is listed in
-> `.gitignore`. Committing it would republish the credentials a second time. The values are
-> deliberately not reproduced anywhere in this document.
+> This is a historical warning. The credential values are deliberately not reproduced anywhere in this document. Their rotation/revocation status cannot be verified from this repository. If either value was real and has not already been rotated, rotate it and review the public share/access history.
 
 ---
 
@@ -323,7 +324,7 @@ Retained priority list, verbatim in spirit:
 
 ---
 
-## 5. Verified state of this workspace today (2026-10-11)
+## 5. Historical verified state of this workspace (2026-10-11)
 
 Checked directly against the working tree, not against the chat or the README. See
 [`github-vs-local-audit.md`](./github-vs-local-audit.md) for the full audit and evidence.
@@ -363,6 +364,30 @@ for the repository in its current state — that could not be verified here (no 
 an empty `docker-compose.yml`, and nothing on port 5432).
 
 ---
+
+## 5.1 Current repository status (2026-11-15)
+
+At the start of the documentation review, `main` was at `c1be0651fd3503f12e06061755e39228f32950e0`. The latest preceding CI run was [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), which passed all three jobs:
+
+- Python unit/API: 142 passed, 1 warning.
+- Playwright Chromium E2E: 6 passed, 2 warnings.
+- Python and JavaScript dependency audits: passed; no known vulnerabilities reported.
+
+The following earlier decisions/findings have since changed:
+
+| Earlier state or open decision | Current state |
+|---|---|
+| PostgreSQL persistence incomplete/planned | PostgreSQL is the active persistence layer for API operations, transaction events, audit and idempotency records. |
+| Transaction atomicity and row locking needed | Request-scoped transaction boundaries, row locks and rollback/concurrency tests are implemented for the tested payment paths. |
+| Idempotency needed for all mutations | Optional idempotency is implemented for authorization, capture, settlement and refund using transaction-scoped PostgreSQL advisory locks. |
+| Security and redaction needed | A baseline exists: service/admin API keys, CORS restrictions, test-reset gating, safe errors, request-size limits, security headers and redaction. |
+| CI/CD weak or absent | GitHub Actions now runs Python/API tests, Playwright E2E and Python/JavaScript dependency audits. |
+| Selenium / LangChain / ChromaDB dependency decision open | Playwright is the active browser framework. Selenium and AI/RAG libraries are not current dependencies. AI pipelines remain planned. |
+| Docker files were placeholders | They remain empty placeholders; no runnable Docker/Compose setup is claimed. |
+
+Security limitations remain: no per-user RBAC, key rotation workflow, built-in rate limiter, external secret manager, production dashboard credential flow or PCI DSS assessment. The audit hash chain is not immutable against a database superuser. This project remains a synthetic payment simulation, not a payment processor.
+
+The current test database fixtures create and drop ORM tables. Tests must use disposable PostgreSQL databases; migrations are applied before migration-dependent tests.
 
 ## 6. Open decisions owed before the next phase
 

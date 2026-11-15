@@ -1,32 +1,42 @@
-# React + TypeScript + Vite
+# PayGuard-AI dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + TypeScript + Vite dashboard for the synthetic PayGuard-AI payment gateway.
 
-Currently, two official plugins are available:
+The dashboard currently provides overview, card and transaction views. It is a local development/test interface, not a production operations console.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Requirements
 
-## React Compiler
+- Node.js 22 (the CI version)
+- npm
+- PayGuard-AI FastAPI backend at `http://localhost:8000`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Run
 
-## Expanding the Oxlint configuration
+From this directory:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm ci
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Vite serves the dashboard at `http://localhost:5173`.
+
+Create a production build:
+
+```powershell
+npm run build
+```
+
+Run the configured linter:
+
+```powershell
+npm run lint
+```
+
+## Backend connection and authentication limitation
+
+The API client in `src/services/api.ts` currently hardcodes `http://localhost:8000/api/v1` and does not send `X-API-Key`. The backend allows keyless access only when `PAYGUARD_ENV=development` or `test` and no service key is configured. Production requires a service key, so this dashboard client is not production-compatible as currently written.
+
+Do not place a production API key in a Vite `VITE_*` variable: values exposed to browser code are public to users. A production design needs a server-side proxy or another deliberate credential flow.
+
+The dashboard uses synthetic payment data only. It is not connected to real card networks or payment processors.

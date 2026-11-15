@@ -181,3 +181,27 @@ Stated plainly rather than assumed:
 
 None of the above is a code-architecture problem. It is the "maturity synchronisation" the review
 identified — now confirmed to be a public, committed condition rather than a local one.
+
+
+---
+
+## Current status update (15 November 2026)
+
+This document is a historical audit of the repository at commit `1beef880b21ecfcb4e80fd9e7f81b101e03d2270`. Its observations above describe that snapshot and should not be read as the current repository state.
+
+The current `main` head at the start of the documentation review is `c1be0651fd3503f12e06061755e39228f32950e0`. The latest CI run before the documentation sweep is [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), which passed all three jobs: 142 Python unit/API tests, 6 Playwright E2E tests, and dependency audits.
+
+| Earlier finding | Current status at this review |
+|---|---|
+| CI workflow was empty | Resolved. `.github/workflows/ci.yml` contains Python/API, dashboard E2E and dependency-audit jobs. |
+| PostgreSQL was only planned | Resolved. API routes use PostgreSQL repositories; Alembic migrations are present through `003_audit_truncate_guard`. |
+| Concurrency and idempotency were incomplete | Expanded. Row-lock and advisory-lock paths plus PostgreSQL concurrency/rollback tests exist for the tested payment operations. |
+| Requirements included Selenium and AI libraries | Resolved in the current manifest. Playwright is used; Selenium, LangChain and ChromaDB are not current runtime/test dependencies. |
+| README reported 96 tests and in-memory persistence | Superseded by the current documentation sweep. The last verified CI run recorded 142 Python unit/API and 6 E2E tests passing. |
+| Docker artifacts were empty | Still unresolved. `docker/Dockerfile` and `docker/docker-compose.yml` remain zero-byte placeholders and are not a supported setup path. |
+| Empty `tests/e2e/pages/dashboard_page.py` | Still a zero-byte placeholder; the active E2E fixture is in `tests/e2e/conftest.py`. |
+| `tests/ui/` had no Selenium tests | Still no active Selenium suite; the directory contains only its package marker. |
+| `pytest.ini` was absent | Still absent. Current test commands and configuration are documented from the actual workflow and fixtures. |
+| AI engine was only a placeholder | Still true. `ai_engine/__init__.py` is empty; AI RCA and test generation are not implemented. |
+
+The earlier ZIP archive remains unverified. No conclusion about its contents is added here.

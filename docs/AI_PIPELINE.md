@@ -90,21 +90,15 @@ The following capabilities already provide the inputs required for the future AI
 * API-backed E2E fixtures
 * Transaction lifecycle UI validation
 
-The current full regression baseline is:
+The latest verified pre-documentation CI baseline is [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), for commit `c1be0651fd3503f12e06061755e39228f32950e0`:
 
 ```text
-96 tests collected
-96 passed
-0 failed
+Python unit/API: 142 passed, 1 warning
+Playwright Chromium E2E: 6 passed, 2 warnings
+Dependency audits: passed
 ```
 
-The current Playwright E2E baseline is:
-
-```text
-4 tests
-4 passed
-0 failed
-```
+The counts are split across separate CI jobs. The AI pipelines remain unimplemented; these tests validate the deterministic payment application and dashboard, not AI functionality.
 
 The AI layer should consume this deterministic test and failure data rather than attempting to replace the underlying test architecture.
 
@@ -1058,7 +1052,7 @@ Any future automation beyond reporting should be explicitly designed and validat
 
 # CI/CD Integration
 
-The AI pipelines are intended to integrate with GitHub Actions after the CI/CD foundation is implemented.
+GitHub Actions CI is implemented for deterministic Python/API tests, Playwright E2E tests and dependency audits. A separate AI RCA/test-generation workflow is still planned.
 
 ## Planned RCA Workflow
 
@@ -1311,13 +1305,13 @@ The AI layer depends on several capabilities that are not currently implemented.
 | Idempotency behavior             | Reliability/RCA context      | Implemented |
 | Audit events                     | Diagnostic context           | Implemented |
 | Playwright E2E tests             | UI failure source            | Implemented |
-| Persistent storage               | Durable AI context           | Planned     |
+| PostgreSQL payment/audit/idempotency storage | Durable payment state; AI-specific artifact retention | Implemented for payment state; AI artifact retention planned |
 | Failure artifact collection      | RCA input                    | Planned     |
 | ChromaDB                         | Historical retrieval         | Planned     |
 | Embedding model                  | Semantic retrieval           | Planned     |
 | Ollama                           | Local LLM execution          | Planned     |
 | LLM                              | RCA and generation           | Planned     |
-| GitHub Actions                   | Automated AI execution       | Planned     |
+| GitHub Actions                   | Deterministic test/security CI; future AI workflow | Implemented for deterministic CI; AI workflow planned |
 | OpenTelemetry                    | AI/application observability | Planned     |
 
 The AI implementation should therefore follow the project's incremental architecture rather than being introduced before the required foundation exists.
@@ -1326,7 +1320,7 @@ The AI implementation should therefore follow the project's incremental architec
 
 # Recommended Implementation Order
 
-The AI layer should be implemented in the following order:
+The payment reliability foundation and PostgreSQL persistence are implemented. The remaining AI work should follow this order:
 
 ```text
 1. Payment Reliability Foundation
@@ -1388,7 +1382,7 @@ This ordering prevents the AI layer from becoming a substitute for missing relia
 | LangChain                  | Planned        | LLM/RAG orchestration                       |
 | LangGraph                  | Planned        | AI workflow orchestration                   |
 | OpenTelemetry              | Planned        | AI and application observability            |
-| GitHub Actions             | Planned        | Automated AI workflow execution             |
+| GitHub Actions             | Implemented for deterministic CI | Future automated AI workflow execution |
 
 ---
 
@@ -1527,13 +1521,16 @@ The AI layer exists to make the testing process more intelligent, explainable, a
 * [x] State machine
 * [x] Payment service layer
 * [x] Repository abstraction
+* [x] PostgreSQL persistence for payment, transaction, audit and idempotency data
+* [x] Transaction atomicity and tested concurrency controls
 * [x] Transaction history
 * [x] Automated API tests
 * [x] Automated service tests
 * [x] Automated state-machine tests
 * [x] Deterministic failure simulation
 * [x] Idempotency validation
-* [x] Audit-event validation
+* [x] Audit-event validation and hash-chain integrity checks
+* [x] Security baseline and sensitive-data redaction
 * [x] Web Dashboard
 * [x] Playwright E2E testing
 * [x] API-backed E2E fixtures
