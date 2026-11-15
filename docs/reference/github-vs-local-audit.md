@@ -1,5 +1,7 @@
 # Audit: public GitHub repo vs. this local checkout
 
+> **Historical snapshot:** the findings below describe the repository at commit `1beef880b21ecfcb4e80fd9e7f81b101e03d2270`. They are not the current implementation status. See the [15 November 2026 status update](#current-status-update-15-november-2026) at the end for resolved and still-open findings.
+
 **Question answered:** is the public repo behind the local code, and did the chat's final review
 describe GitHub accurately?
 
