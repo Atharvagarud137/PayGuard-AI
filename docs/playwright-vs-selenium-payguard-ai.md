@@ -665,7 +665,7 @@ Then expand to:
 
 ### Phase 5: CI
 
-Add Playwright E2E tests to GitHub Actions and retain failure artifacts.
+The dedicated GitHub Actions Playwright E2E job is implemented; uploading failure artifacts remains a follow-up.
 
 Only after the E2E suite is stable should the project expand its browser matrix.
 
@@ -700,7 +700,7 @@ The page/component layer should contain locator and interaction details.
 
 ## 19. What Should NOT Be Rewritten
 
-The existing 92-test regression baseline should be preserved.
+Preserve the separate Python/unit/API and Playwright E2E suites; CI run #39 verified 142 Python unit/API tests and 6 E2E tests.
 
 Do not rewrite these as browser tests:
 
@@ -818,8 +818,7 @@ Recording the decision prevents it from becoming undocumented team folklore.
 
 ```text
 docs/
-└── testing/
-    └── playwright-vs-selenium-payguard-ai.md
+└── playwright-vs-selenium-payguard-ai.md
 ```
 
 Add a short README reference:
@@ -831,7 +830,7 @@ PayGuard-AI uses pytest for unit and API-level testing and Playwright
 for browser-based end-to-end testing.
 
 See
-[`docs/playwright-vs-selenium-payguard-ai.md`](playwright-vs-selenium-payguard-ai.md)
+[`docs/playwright-vs-selenium-payguard-ai.md`](docs/playwright-vs-selenium-payguard-ai.md)
 for the framework evaluation and architectural rationale.
 ```
 
@@ -877,7 +876,7 @@ the documented criteria provide a rational trigger for reevaluation.
 
 > **Use Playwright for PayGuard-AI's browser/E2E automation, keep the existing pytest API and unit tests, and document the decision as a testing architecture decision record in `docs/playwright-vs-selenium-payguard-ai.md`.**
 
-This gives the project modern browser automation without throwing away the 92-test backend regression suite that is already working.
+This keeps Playwright as the browser framework while preserving the verified 148-test CI baseline: 142 Python unit/API tests and 6 Playwright E2E tests.
 
 ---
 
