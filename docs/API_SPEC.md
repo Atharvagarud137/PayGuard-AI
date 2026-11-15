@@ -1140,24 +1140,24 @@ The API layer is intentionally kept separate from payment business logic.
                |
                v
 ┌──────────────────────────────┐
-│       Repositories           │
+│       PostgreSQL Repositories│
 │                              │
-│ Card repository              │
-│ Transaction repository       │
+│ Card / Transaction           │
+│ Audit / Idempotency          │
 └──────────────┬───────────────┘
                |
                v
 ┌──────────────────────────────┐
-│       Current Storage        │
+│          PostgreSQL          │
 │                              │
-│ Cards                        │
-│ Transactions                 │
-│ Audit events                 │
+│ Cards / Transactions         │
+│ Transaction events           │
+│ Audit hash chain             │
 │ Idempotency records          │
 └──────────────────────────────┘
 ```
 
-This architecture provides a migration path toward persistent database-backed storage without coupling the payment service directly to FastAPI or a specific database implementation.
+The API uses PostgreSQL repositories. The request handler owns the SQLAlchemy transaction; repositories flush but do not commit. Related payment, lifecycle, audit and idempotency writes are committed or rolled back together on the successful mutation paths.
 
 ---
 
@@ -1173,13 +1173,15 @@ The project currently has an automated regression suite covering:
 * Audit service tests
 * Monetary validation tests
 
-The current full regression run reports:
+The latest verified pre-documentation CI run is [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), for commit `c1be0651fd3503f12e06061755e39228f32950e0`:
 
 ```text
-96 total tests
-96 passed
-0 failed
+Python unit/API: 142 passed, 1 warning
+Playwright Chromium E2E: 6 passed, 2 warnings
+Dependency audits: passed
 ```
+
+The suites run in separate CI jobs. These are the results for run #39, not a claim about the later documentation commit.
 
 ## API Coverage
 
@@ -1190,8 +1192,8 @@ The API suite covers:
 * Authorization idempotency
 * Capture
 * Capture idempotency
-* Settlement
-* Refund
+* Settlement idempotency
+* Refund idempotency
 * Audit behavior
 * Simulated technical failures
 * Boundary conditions
@@ -1239,34 +1241,25 @@ Future AI-assisted test generation can consume this specification to identify ad
 
 # Current API Capabilities
 
-| Capability                 | Status      |
-| -------------------------- | ----------- |
-| Card issuance              | Implemented |
-| Authorization              | Implemented |
-| Authorization idempotency  | Implemented |
-| Capture                    | Implemented |
-| Capture idempotency        | Implemented |
-| Settlement                 | Implemented |
-| Full refund                | Implemented |
-| Partial refund             | Implemented |
-| Transaction lookup         | Implemented |
-| Transaction collection     | Implemented |
-| Simulated timeout          | Implemented |
-| Simulated network error    | Implemented |
-| Simulated invalid response | Implemented |
-| OpenAPI generation         | Implemented |
-| Swagger UI                 | Implemented |
-| Payment state machine      | Implemented |
-| Payment service layer      | Implemented |
-| Repository abstraction     | Implemented |
-| In-memory persistence      | Implemented |
-| Audit event persistence    | Implemented |
-| Persistent database        | Planned     |
-| Authentication             | Planned     |
-| Rate limiting              | Planned     |
-| Webhooks                   | Planned     |
-| AI test-case generation    | Planned     |
-| AI Root Cause Analysis     | Planned     |
+| Capability | Status |
+|---|---|
+| Card issuance and payment lifecycle | Implemented |
+| Authorization idempotency | Implemented |
+| Capture idempotency | Implemented |
+| Settlement idempotency | Implemented |
+| Refund idempotency | Implemented |
+| Transaction lookup and collection | Implemented |
+| Failure simulation | Implemented in development/test only |
+| OpenAPI generation / Swagger UI | Implemented in development/test; disabled in production |
+| Payment state machine and service layer | Implemented |
+| PostgreSQL repositories and migrations | Implemented |
+| Persisted audit events and integrity verification | Implemented |
+| Shared service/admin API keys | Implemented |
+| Per-user authentication / RBAC | Not implemented |
+| Built-in rate limiting | Not implemented; deployment gateway responsibility |
+| Webhooks | Planned |
+| AI test-case generation | Planned |
+| AI Root Cause Analysis | Planned |
 
 ---
 
@@ -1276,13 +1269,13 @@ The current API intentionally represents a simplified payment gateway.
 
 The following capabilities are candidates for future iterations:
 
-* Persistent PostgreSQL-backed storage
-* Authentication and authorization
-* Rate limiting
-* Request correlation IDs
-* Currency support
-* Explicit monetary precision handling
-* Merchant validation
+* Per-user identity, RBAC and tenant isolation
+* API-key rotation/revocation and external secret management
+* Deployment-level rate limiting and network controls
+* Webhooks
+* Broader currency support and explicit currency metadata
+* Production dashboard credential flow
+* AI-assisted test generation and root-cause analysis
 * Card expiry validation
 * Transaction expiration
 * Authorization reversal/void
