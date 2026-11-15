@@ -831,7 +831,7 @@ PayGuard-AI uses pytest for unit and API-level testing and Playwright
 for browser-based end-to-end testing.
 
 See
-[`docs/playwright-vs-selenium-payguard-ai.md`](docs/playwright-vs-selenium-payguard-ai.md)
+[`docs/playwright-vs-selenium-payguard-ai.md`](playwright-vs-selenium-payguard-ai.md)
 for the framework evaluation and architectural rationale.
 ```
 
