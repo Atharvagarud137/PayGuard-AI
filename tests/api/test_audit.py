@@ -223,6 +223,13 @@ def test_audit_rows_reject_updates_deletes_and_truncate(
                 {"event_id": audit_event_id},
             )
 
+    # The historical custom GUC must not grant an audit-delete exception.
+    db_session.execute(
+        text(
+            "SELECT set_config("
+            "'payguard.allow_audit_delete', 'on', true)"
+        )
+    )
     with pytest.raises(DBAPIError):
         with db_session.begin_nested():
             db_session.execute(
@@ -281,7 +288,7 @@ def test_audit_hash_chain_detects_out_of_band_tampering(
     assert result["first_invalid_sequence"] == 1
 
 
-def test_test_reset_clears_audit_events_using_test_only_exception(
+def test_test_reset_preserves_append_only_audit_events(
         client,
         issued_card,
 ):
@@ -308,8 +315,6 @@ def test_test_reset_clears_audit_events_using_test_only_exception(
 
     after = client.get("/api/v1/audit/integrity")
     assert after.status_code == 200
-    assert after.json() == {
-        "valid": True,
-        "event_count": 0,
-        "first_invalid_sequence": None,
-    }
+    assert after.json()["valid"] is True
+    assert after.json()["event_count"] == before.json()["event_count"]
+    assert after.json()["first_invalid_sequence"] is None

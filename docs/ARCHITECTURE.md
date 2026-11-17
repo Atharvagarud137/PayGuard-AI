@@ -76,7 +76,7 @@ A unique database constraint remains a second safeguard against duplicate record
 
 Audit inserts are serialized using a transaction-scoped advisory lock. Each row stores a sequence number, previous hash and event hash calculated from canonical event fields. The admin-protected integrity endpoint checks sequence continuity and hashes.
 
-Database triggers reject ordinary UPDATE, DELETE and TRUNCATE operations. The test reset route uses a transaction-local exception only when explicitly enabled in test mode. This design is tamper-evident against ordinary application operations, not immutable against a database owner/superuser who can disable triggers or rewrite the chain. There is no external signed anchor, WORM storage or independent audit export.
+Database triggers reject UPDATE, DELETE and TRUNCATE operations. The test reset route does not delete audit rows; it preserves append-only history while clearing synthetic payment data. No caller-settable PostgreSQL setting grants an audit-delete exception. This design is tamper-evident against ordinary application operations, not immutable against a database owner/superuser who can disable triggers or rewrite the chain. There is no external signed anchor, WORM storage or independent audit export.
 
 AuditService accepts explicit operational fields rather than arbitrary request bodies and applies redaction before persistence. Audit routes require the admin key outside isolated tests.
 

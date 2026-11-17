@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.database_models import (
-    AuditEventDB,
     CardDB,
     IdempotencyRecordDB,
     TransactionDB,
@@ -215,19 +214,10 @@ def reset_test_state(
     This destructive endpoint must not be exposed in production.
     """
     try:
-        # The destructive reset route exists only in explicitly enabled
-        # test mode. This transaction-local flag is the sole delete exception
-        # in the PostgreSQL append-only audit trigger.
-        db.execute(
-            text(
-                "SELECT set_config("
-                "'payguard.allow_audit_delete', 'on', true)"
-            )
-        )
-
+        # Audit records are intentionally retained. Even the isolated test
+        # reset endpoint must not provide a path around append-only controls.
         # Delete dependent records before their parent records.
         db.execute(delete(IdempotencyRecordDB))
-        db.execute(delete(AuditEventDB))
         db.execute(delete(TransactionEventDB))
         db.execute(delete(TransactionDB))
         db.execute(delete(CardDB))

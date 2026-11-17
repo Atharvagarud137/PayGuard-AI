@@ -41,8 +41,9 @@ def reset_backend_state(
 
         - cards
         - transactions
-        - audit events
         - idempotency records
+
+    Audit events are intentionally retained to preserve append-only history.
     """
 
     with Client(
