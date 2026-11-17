@@ -62,6 +62,7 @@ def test_authorization_rolls_back_all_payment_writes_when_idempotency_fails(
         add_then_fail,
     )
 
+    correlation_id = str(uuid4())
     with pytest.raises(
             RuntimeError,
             match="injected idempotency persistence failure",
@@ -73,7 +74,10 @@ def test_authorization_rolls_back_all_payment_writes_when_idempotency_fails(
                 "amount": "1000.00",
                 "merchant_id": "merchant-atomicity-test",
             },
-            headers={"Idempotency-Key": "atomicity-auth-rollback"},
+            headers={
+                "Idempotency-Key": "atomicity-auth-rollback",
+                "X-Correlation-ID": correlation_id,
+            },
         )
 
     db_session.expire_all()
@@ -88,8 +92,12 @@ def test_authorization_rolls_back_all_payment_writes_when_idempotency_fails(
     assert db_session.scalar(
         select(func.count()).select_from(TransactionEventDB)
     ) == 0
+    # Older audit rows from earlier tests are retained by design.
+    # Assert that this failed request did not append a new audit record.
     assert db_session.scalar(
-        select(func.count()).select_from(AuditEventDB)
+        select(func.count())
+        .select_from(AuditEventDB)
+        .where(AuditEventDB.correlation_id == correlation_id)
     ) == 0
     assert db_session.scalar(
         select(func.count()).select_from(IdempotencyRecordDB)
