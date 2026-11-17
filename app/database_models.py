@@ -188,11 +188,6 @@ class TransactionDB(Base):
         order_by="TransactionEventDB.created_at",
     )
 
-    audit_events: Mapped[list["AuditEventDB"]] = relationship(
-        "AuditEventDB",
-        back_populates="transaction",
-    )
-
     __table_args__ = (
         Index(
             "ix_transactions_card_status",
@@ -314,9 +309,10 @@ class AuditEventDB(Base):
         primary_key=True,
     )
 
+    # Preserve the original transaction identifier as immutable audit context.
+    # Historical audit rows must outlive synthetic transaction cleanup.
     transaction_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("transactions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -363,11 +359,6 @@ class AuditEventDB(Base):
         nullable=False,
         server_default=func.now(),
         index=True,
-    )
-
-    transaction: Mapped[Optional["TransactionDB"]] = relationship(
-        "TransactionDB",
-        back_populates="audit_events",
     )
 
     __table_args__ = (

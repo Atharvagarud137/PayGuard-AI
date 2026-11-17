@@ -159,19 +159,8 @@ def _run_concurrent_duplicate_requests(
 
 def _cleanup_payment_state(engine, card_id: str, key: str) -> None:
     with Session(engine) as db:
-        db.execute(
-            text(
-                "SELECT set_config("
-                "'payguard.allow_audit_delete', 'on', true)"
-            )
-        )
         transaction_ids = select(TransactionDB.id).where(
             TransactionDB.card_id == card_id
-        )
-        db.execute(
-            delete(AuditEventDB).where(
-                AuditEventDB.transaction_id.in_(transaction_ids)
-            )
         )
         db.execute(
             delete(TransactionEventDB).where(
