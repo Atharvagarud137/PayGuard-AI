@@ -120,18 +120,19 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_DB: payguard_test
-          POSTGRES_USER: payguard
-          POSTGRES_PASSWORD: payguard_test_password
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U payguard -d payguard_test"
+          --health-cmd "pg_isready -U postgres -d payguard_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql+psycopg://payguard:payguard_test_password@localhost:5432/payguard_test
+      DATABASE_URL: postgresql+psycopg://payguard_app:payguard_app_test_password@localhost:5432/payguard_test
+      PAYGUARD_MIGRATION_DATABASE_URL: postgresql+psycopg://payguard_migrator:payguard_migrator_test_password@localhost:5432/payguard_test
       PAYGUARD_ENV: test
       PAYGUARD_ENABLE_TEST_ENDPOINTS: "true"
       PAYGUARD_TEST_RESET_TOKEN: payguard-test-reset-token-2026-phase4
@@ -171,6 +172,25 @@ jobs:
 
       - name: Install Chromium
         run: playwright install --with-deps chromium
+
+      - name: Create least-privilege database roles
+        env:
+          PGPASSWORD: postgres_test_password
+        run: |
+          psql -h localhost -U postgres -d payguard_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE payguard_migrator LOGIN PASSWORD 'payguard_migrator_test_password'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+          CREATE ROLE payguard_app LOGIN PASSWORD 'payguard_app_test_password'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+          GRANT CONNECT ON DATABASE payguard_test TO payguard_migrator, payguard_app;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          GRANT USAGE, CREATE ON SCHEMA public TO payguard_migrator;
+          GRANT USAGE ON SCHEMA public TO payguard_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE payguard_migrator IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO payguard_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE payguard_migrator IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO payguard_app;
+          SQL
 
       - name: Apply database migrations
         run: alembic upgrade head

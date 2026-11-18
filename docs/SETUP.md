@@ -66,7 +66,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE payguard_migrator IN SCHEMA public
 
 Use local-only credentials. Do not commit them or reuse production credentials. The migration role owns schema objects; the application role must never own tables or have schema CREATE privileges.
 
-The test fixtures create and drop ORM tables at session teardown. Use disposable test databases only. Do not point tests at a development or production database.
+The test fixtures verify that migrations have been applied and never create or drop tables. Use disposable test databases only. Do not point tests at a development or production database.
 
 ## Run the backend in local development mode
 
@@ -123,7 +123,7 @@ The dashboard API client currently hardcodes the local backend URL and does not 
 
 ## Run Python unit and API tests
 
-Use a dedicated API test database. Set both variables because pytest uses `TEST_DATABASE_URL` (or falls back to `DATABASE_URL`) while Alembic uses `DATABASE_URL`.
+Use a dedicated API test database. Set `DATABASE_URL` to the restricted runtime role, `TEST_DATABASE_URL` to the same runtime URL, and `PAYGUARD_MIGRATION_DATABASE_URL` to the migration-owner URL.
 
 ```powershell
 $env:PAYGUARD_ENV = "test"
@@ -139,7 +139,7 @@ The root pytest fixtures do not create or drop tables. They verify that Alembic 
 
 ## Run Playwright E2E tests
 
-The E2E suite uses a separate disposable database because the Python/API test fixture drops its schema at teardown.
+The E2E suite uses a separate disposable database so browser tests cannot read or modify the Python/API test database.
 
 In a backend terminal:
 
@@ -181,6 +181,7 @@ The GitHub Actions workflow separates the work into three jobs. Each database-ba
 
 ```powershell
 # Python syntax and migration checks
+$env:PAYGUARD_MIGRATION_DATABASE_URL = "postgresql+psycopg://payguard_migrator:replace-with-migration-password@localhost:5432/payguard_api_test"
 python -m compileall -q app tests
 alembic heads
 alembic history
