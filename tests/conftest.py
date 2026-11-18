@@ -11,11 +11,11 @@ os.environ.setdefault(
     "payguard-test-reset-token-2026-phase4",
 )
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import Base, get_db
+from app.database import get_db
 from app.main import app
 
 
@@ -56,20 +56,30 @@ def test_engine() -> Generator[Engine, None, None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def create_test_schema(
+def verify_migrated_test_schema(
         test_engine: Engine,
-) -> Generator[None, None, None]:
+) -> None:
     """
-    Create ORM tables for an isolated test database.
+    Verify migrations created the schema before tests start.
 
-    Alembic migrations must be tested separately.
+    The runtime role must not own tables or have schema DDL privileges.
+    Test databases are disposable and are recreated by the test environment.
     """
-    Base.metadata.create_all(bind=test_engine)
+    if not inspect(test_engine).has_table("alembic_version"):
+        raise RuntimeError(
+            "Test database is not migrated. Run Alembic with "
+            "PAYGUARD_MIGRATION_DATABASE_URL before pytest."
+        )
 
-    try:
-        yield
-    finally:
-        Base.metadata.drop_all(bind=test_engine)
+    with test_engine.connect() as connection:
+        version = connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one_or_none()
+
+    if version is None:
+        raise RuntimeError(
+            "Test database has no Alembic revision. Run migrations first."
+        )
 
 
 @pytest.fixture

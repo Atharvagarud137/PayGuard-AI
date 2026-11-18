@@ -14,7 +14,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # ============================================================================
 
 DEFAULT_DATABASE_URL = (
-    "postgresql+psycopg://payguard:payguard@localhost:5432/payguard"
+    "postgresql+psycopg://payguard_app:payguard_app_local@localhost:5432/payguard"
 )
 
 

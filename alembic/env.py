@@ -46,21 +46,17 @@ target_metadata = Base.metadata
 
 def get_database_url() -> str:
     """
-    Return the database URL used by Alembic.
+    Return the dedicated migration-owner connection URL.
 
-    DATABASE_URL takes precedence so migrations use the same database
-    configuration as the application. If it is not set, sqlalchemy.url
-    from alembic.ini is used.
+    Alembic must never silently fall back to the application's runtime
+    DATABASE_URL. Configure PAYGUARD_MIGRATION_DATABASE_URL explicitly.
     """
-    database_url = os.getenv("DATABASE_URL")
+    database_url = os.getenv("PAYGUARD_MIGRATION_DATABASE_URL")
 
     if database_url is None or not database_url.strip():
-        database_url = config.get_main_option("sqlalchemy.url")
-
-    if not database_url or not database_url.strip():
         raise RuntimeError(
-            "Database URL is not configured. Set DATABASE_URL or define "
-            "sqlalchemy.url in alembic.ini."
+            "PAYGUARD_MIGRATION_DATABASE_URL must be explicitly configured "
+            "for Alembic migrations."
         )
 
     database_url = database_url.strip()
