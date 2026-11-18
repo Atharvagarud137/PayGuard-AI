@@ -203,15 +203,31 @@ def _create_committed_audit_event():
             },
         )
         assert card_response.status_code == 201
+        card_id = card_response.json()["card_id"]
         authorization = client.post(
             "/api/v1/transactions/authorize",
             json={
-                "card_id": card_response.json()["card_id"],
+                "card_id": card_id,
                 "amount": 100,
                 "merchant_id": "merchant-audit-maintenance-test",
             },
         )
         assert authorization.status_code == 200
+    return card_id
+
+
+def _cleanup_committed_audit_test_card(test_engine, card_id):
+    from sqlalchemy import delete
+    from sqlalchemy.orm import Session
+
+    from app.database_models import CardDB, TransactionDB
+
+    with Session(test_engine) as db:
+        db.execute(
+            delete(TransactionDB).where(TransactionDB.card_id == card_id)
+        )
+        db.execute(delete(CardDB).where(CardDB.id == card_id))
+        db.commit()
 
 
 def test_audit_rows_reject_updates_deletes_and_truncate(
@@ -223,47 +239,49 @@ def test_audit_rows_reject_updates_deletes_and_truncate(
     from sqlalchemy.exc import DBAPIError
     from sqlalchemy.orm import Session
 
-    _create_committed_audit_event()
-
-    with Session(test_engine) as db:
-        audit_event_id = db.execute(
-            text(
-                "SELECT id FROM audit_events "
-                "ORDER BY chain_sequence DESC LIMIT 1"
-            )
-        ).scalar_one()
-
-    # Use the migration-owner connection to prove the trigger, rather than
-    # runtime table privileges, rejects mutation attempts.
-    with migration_engine.connect() as maintenance:
-        with maintenance.begin():
-            with pytest.raises(DBAPIError):
-                with maintenance.begin_nested():
-                    maintenance.execute(
-                        text(
-                            "UPDATE audit_events SET message='tampered' "
-                            "WHERE id=:event_id"
-                        ),
-                        {"event_id": audit_event_id},
-                    )
-
-            # A caller-settable custom GUC must not grant a delete exception.
-            maintenance.execute(
+    card_id = _create_committed_audit_event()
+    try:
+        with Session(test_engine) as db:
+            audit_event_id = db.execute(
                 text(
-                    "SELECT set_config("
-                    "'payguard.allow_audit_delete', 'on', true)"
+                    "SELECT id FROM audit_events "
+                    "ORDER BY chain_sequence DESC LIMIT 1"
                 )
-            )
-            with pytest.raises(DBAPIError):
-                with maintenance.begin_nested():
-                    maintenance.execute(
-                        text("DELETE FROM audit_events WHERE id=:event_id"),
-                        {"event_id": audit_event_id},
-                    )
+            ).scalar_one()
 
-            with pytest.raises(DBAPIError):
-                with maintenance.begin_nested():
-                    maintenance.execute(text("TRUNCATE TABLE audit_events"))
+        # Use the migration-owner connection to prove the trigger, rather than
+        # runtime table privileges, rejects mutation attempts.
+        with migration_engine.connect() as maintenance:
+            with maintenance.begin():
+                with pytest.raises(DBAPIError):
+                    with maintenance.begin_nested():
+                        maintenance.execute(
+                            text(
+                                "UPDATE audit_events SET message='tampered' "
+                                "WHERE id=:event_id"
+                            ),
+                            {"event_id": audit_event_id},
+                        )
+
+                # A caller-settable custom GUC must not grant a delete exception.
+                maintenance.execute(
+                    text(
+                        "SELECT set_config("
+                        "'payguard.allow_audit_delete', 'on', true)"
+                    )
+                )
+                with pytest.raises(DBAPIError):
+                    with maintenance.begin_nested():
+                        maintenance.execute(
+                            text("DELETE FROM audit_events WHERE id=:event_id"),
+                            {"event_id": audit_event_id},
+                        )
+
+                with pytest.raises(DBAPIError):
+                    with maintenance.begin_nested():
+                        maintenance.execute(text("TRUNCATE TABLE audit_events"))
+    finally:
+        _cleanup_committed_audit_test_card(test_engine, card_id)
 
 
 def test_audit_hash_chain_detects_out_of_band_tampering(
@@ -277,35 +295,71 @@ def test_audit_hash_chain_detects_out_of_band_tampering(
         PostgresAuditRepository,
     )
 
-    _create_committed_audit_event()
+    card_id = _create_committed_audit_event()
+    try:
+        with Session(test_engine) as db:
+            original = db.execute(
+                text(
+                    "SELECT id, message FROM audit_events "
+                    "WHERE chain_sequence=1"
+                )
+            ).one()
 
-    # Only the migration owner can disable a trigger. This simulates an
-    # out-of-band privileged database compromise, not a runtime operation.
-    with migration_engine.begin() as maintenance:
-        maintenance.execute(
-            text(
-                "ALTER TABLE audit_events "
-                "DISABLE TRIGGER audit_events_prevent_mutation"
+        # Only the migration owner can disable a trigger. This simulates an
+        # out-of-band privileged database compromise, not a runtime operation.
+        with migration_engine.begin() as maintenance:
+            maintenance.execute(
+                text(
+                    "ALTER TABLE audit_events "
+                    "DISABLE TRIGGER audit_events_prevent_mutation"
+                )
             )
-        )
-        maintenance.execute(
-            text(
-                "UPDATE audit_events SET message='out-of-band modification' "
-                "WHERE chain_sequence=1"
+            maintenance.execute(
+                text(
+                    "UPDATE audit_events SET message='out-of-band modification' "
+                    "WHERE id=:event_id"
+                ),
+                {"event_id": original.id},
             )
-        )
-        maintenance.execute(
-            text(
-                "ALTER TABLE audit_events "
-                "ENABLE TRIGGER audit_events_prevent_mutation"
+            maintenance.execute(
+                text(
+                    "ALTER TABLE audit_events "
+                    "ENABLE TRIGGER audit_events_prevent_mutation"
+                )
             )
-        )
 
-    with Session(test_engine) as db:
-        result = PostgresAuditRepository(db).verify_integrity()
+        with Session(test_engine) as db:
+            result = PostgresAuditRepository(db).verify_integrity()
 
-    assert result["valid"] is False
-    assert result["first_invalid_sequence"] == 1
+        assert result["valid"] is False
+        assert result["first_invalid_sequence"] == 1
+
+        # Restore the synthetic test row so later tests see a valid chain.
+        with migration_engine.begin() as maintenance:
+            maintenance.execute(
+                text(
+                    "ALTER TABLE audit_events "
+                    "DISABLE TRIGGER audit_events_prevent_mutation"
+                )
+            )
+            maintenance.execute(
+                text(
+                    "UPDATE audit_events SET message=:message WHERE id=:event_id"
+                ),
+                {"message": original.message, "event_id": original.id},
+            )
+            maintenance.execute(
+                text(
+                    "ALTER TABLE audit_events "
+                    "ENABLE TRIGGER audit_events_prevent_mutation"
+                )
+            )
+
+        with Session(test_engine) as db:
+            restored = PostgresAuditRepository(db).verify_integrity()
+        assert restored["valid"] is True
+    finally:
+        _cleanup_committed_audit_test_card(test_engine, card_id)
 
 
 def test_test_reset_preserves_append_only_audit_events(
