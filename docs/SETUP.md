@@ -34,16 +34,37 @@ If PowerShell blocks activation, use the Python executable directly from `.venv\
 
 ## Create local PostgreSQL databases
 
-Create a local development database and separate disposable test databases using your PostgreSQL administrator account. For example:
+Create separate migration-owner and runtime roles, plus local development and disposable test databases, using your PostgreSQL administrator account. For example:
 
 ```sql
-CREATE ROLE payguard LOGIN PASSWORD 'replace-with-a-local-password';
-CREATE DATABASE payguard OWNER payguard;
-CREATE DATABASE payguard_api_test OWNER payguard;
-CREATE DATABASE payguard_e2e_test OWNER payguard;
+CREATE ROLE payguard_migrator LOGIN PASSWORD 'replace-with-a-strong-local-password'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+CREATE ROLE payguard_app LOGIN PASSWORD 'replace-with-a-different-local-password'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+
+CREATE DATABASE payguard;
+CREATE DATABASE payguard_api_test;
+CREATE DATABASE payguard_e2e_test;
+
+GRANT CONNECT ON DATABASE payguard TO payguard_migrator, payguard_app;
+GRANT CONNECT ON DATABASE payguard_api_test TO payguard_migrator, payguard_app;
+GRANT CONNECT ON DATABASE payguard_e2e_test TO payguard_migrator, payguard_app;
 ```
 
-Use local-only credentials. Do not commit them or reuse production credentials.
+Connect to each database as the PostgreSQL administrator and configure its public schema:
+
+```sql
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA public TO payguard_migrator;
+GRANT USAGE ON SCHEMA public TO payguard_app;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE payguard_migrator IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO payguard_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE payguard_migrator IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO payguard_app;
+```
+
+Use local-only credentials. Do not commit them or reuse production credentials. The migration role owns schema objects; the application role must never own tables or have schema CREATE privileges.
 
 The test fixtures create and drop ORM tables at session teardown. Use disposable test databases only. Do not point tests at a development or production database.
 
@@ -53,9 +74,13 @@ In a PowerShell terminal from the repository root:
 
 ```powershell
 $env:PAYGUARD_ENV = "development"
-$env:DATABASE_URL = "postgresql+psycopg://payguard:replace-with-a-local-password@localhost:5432/payguard"
+$env:DATABASE_URL = "postgresql+psycopg://payguard_app:replace-with-app-password@localhost:5432/payguard"
+$env:PAYGUARD_MIGRATION_DATABASE_URL = "postgresql+psycopg://payguard_migrator:replace-with-migration-password@localhost:5432/payguard"
 
+# Run migrations as a separate deployment step.
 alembic upgrade head
+
+# The API process uses only the runtime account.
 uvicorn app.main:app --reload --reload-dir app --port 8000
 ```
 
@@ -102,14 +127,15 @@ Use a dedicated API test database. Set both variables because pytest uses `TEST_
 
 ```powershell
 $env:PAYGUARD_ENV = "test"
-$env:DATABASE_URL = "postgresql+psycopg://payguard:replace-with-a-local-password@localhost:5432/payguard_api_test"
+$env:DATABASE_URL = "postgresql+psycopg://payguard_app:replace-with-app-password@localhost:5432/payguard_api_test"
 $env:TEST_DATABASE_URL = $env:DATABASE_URL
+$env:PAYGUARD_MIGRATION_DATABASE_URL = "postgresql+psycopg://payguard_migrator:replace-with-migration-password@localhost:5432/payguard_api_test"
 
 alembic upgrade head
 pytest tests/unit tests/api -v --tb=short
 ```
 
-The root pytest fixtures create ORM tables and drop them when the test session ends. The migrations must be applied first for tests that verify PostgreSQL triggers. Because the fixture drops the ORM tables while the Alembic version table may remain, recreate the disposable test database before repeating the migration/test cycle. Do not reuse this database for application development.
+The root pytest fixtures do not create or drop tables. They verify that Alembic has already migrated the disposable database, then connect using the application role. This keeps schema ownership and DDL privileges out of the test/runtime process. Recreate the disposable test database before repeating a migration/test cycle. Do not reuse it for application development.
 
 ## Run Playwright E2E tests
 
@@ -121,7 +147,8 @@ In a backend terminal:
 $env:PAYGUARD_ENV = "test"
 $env:PAYGUARD_ENABLE_TEST_ENDPOINTS = "true"
 $env:PAYGUARD_TEST_RESET_TOKEN = "replace-with-at-least-32-random-test-characters"
-$env:DATABASE_URL = "postgresql+psycopg://payguard:replace-with-a-local-password@localhost:5432/payguard_e2e_test"
+$env:DATABASE_URL = "postgresql+psycopg://payguard_app:replace-with-app-password@localhost:5432/payguard_e2e_test"
+$env:PAYGUARD_MIGRATION_DATABASE_URL = "postgresql+psycopg://payguard_migrator:replace-with-migration-password@localhost:5432/payguard_e2e_test"
 
 alembic upgrade head
 uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -139,7 +166,7 @@ From the repository root in a third terminal, use the same test-reset token:
 
 ```powershell
 $env:PAYGUARD_ENV = "test"
-$env:DATABASE_URL = "postgresql+psycopg://payguard:replace-with-a-local-password@localhost:5432/payguard_e2e_test"
+$env:DATABASE_URL = "postgresql+psycopg://payguard_app:replace-with-app-password@localhost:5432/payguard_e2e_test"
 $env:TEST_DATABASE_URL = $env:DATABASE_URL
 $env:PAYGUARD_TEST_RESET_TOKEN = "replace-with-at-least-32-random-test-characters"
 
@@ -150,7 +177,7 @@ The E2E fixture calls `POST /api/v1/test/reset` before each test. The backend mu
 
 ## CI-equivalent commands
 
-The GitHub Actions workflow separates the work into three jobs:
+The GitHub Actions workflow separates the work into three jobs. Each database-backed job creates a migration-owner role and a restricted application role. Alembic connects with PAYGUARD_MIGRATION_DATABASE_URL; the API, pytest database fixtures, and E2E backend connect with DATABASE_URL:
 
 ```powershell
 # Python syntax and migration checks
