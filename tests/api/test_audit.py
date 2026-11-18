@@ -191,6 +191,7 @@ def test_audit_rows_reject_updates_deletes_and_truncate(
         client,
         issued_card,
         db_session,
+        migration_engine,
 ):
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
@@ -213,39 +214,44 @@ def test_audit_rows_reject_updates_deletes_and_truncate(
         )
     ).scalar_one()
 
-    with pytest.raises(DBAPIError):
-        with db_session.begin_nested():
-            db_session.execute(
+    # Use the migration-owner connection to prove the trigger, rather than
+    # runtime table privileges, rejects mutation attempts.
+    with migration_engine.connect() as maintenance:
+        with maintenance.begin():
+            with pytest.raises(DBAPIError):
+                with maintenance.begin_nested():
+                    maintenance.execute(
+                        text(
+                            "UPDATE audit_events SET message='tampered' "
+                            "WHERE id=:event_id"
+                        ),
+                        {"event_id": audit_event_id},
+                    )
+
+            # The historical custom GUC must not grant a delete exception.
+            maintenance.execute(
                 text(
-                    "UPDATE audit_events SET message='tampered' "
-                    "WHERE id=:event_id"
-                ),
-                {"event_id": audit_event_id},
+                    "SELECT set_config("
+                    "'payguard.allow_audit_delete', 'on', true)"
+                )
             )
+            with pytest.raises(DBAPIError):
+                with maintenance.begin_nested():
+                    maintenance.execute(
+                        text("DELETE FROM audit_events WHERE id=:event_id"),
+                        {"event_id": audit_event_id},
+                    )
 
-    # The historical custom GUC must not grant an audit-delete exception.
-    db_session.execute(
-        text(
-            "SELECT set_config("
-            "'payguard.allow_audit_delete', 'on', true)"
-        )
-    )
-    with pytest.raises(DBAPIError):
-        with db_session.begin_nested():
-            db_session.execute(
-                text("DELETE FROM audit_events WHERE id=:event_id"),
-                {"event_id": audit_event_id},
-            )
-
-    with pytest.raises(DBAPIError):
-        with db_session.begin_nested():
-            db_session.execute(text("TRUNCATE TABLE audit_events"))
+            with pytest.raises(DBAPIError):
+                with maintenance.begin_nested():
+                    maintenance.execute(text("TRUNCATE TABLE audit_events"))
 
 
 def test_audit_hash_chain_detects_out_of_band_tampering(
         client,
         issued_card,
         db_session,
+        migration_engine,
 ):
     from sqlalchemy import text
 
@@ -263,24 +269,27 @@ def test_audit_hash_chain_detects_out_of_band_tampering(
     )
     assert authorization.status_code == 200
 
-    db_session.execute(
-        text(
-            "ALTER TABLE audit_events "
-            "DISABLE TRIGGER audit_events_prevent_mutation"
+    # Only the migration owner can disable a trigger. This simulates an
+    # out-of-band privileged database compromise, not a runtime operation.
+    with migration_engine.begin() as maintenance:
+        maintenance.execute(
+            text(
+                "ALTER TABLE audit_events "
+                "DISABLE TRIGGER audit_events_prevent_mutation"
+            )
         )
-    )
-    db_session.execute(
-        text(
-            "UPDATE audit_events SET message='out-of-band modification' "
-            "WHERE chain_sequence=1"
+        maintenance.execute(
+            text(
+                "UPDATE audit_events SET message='out-of-band modification' "
+                "WHERE chain_sequence=1"
+            )
         )
-    )
-    db_session.execute(
-        text(
-            "ALTER TABLE audit_events "
-            "ENABLE TRIGGER audit_events_prevent_mutation"
+        maintenance.execute(
+            text(
+                "ALTER TABLE audit_events "
+                "ENABLE TRIGGER audit_events_prevent_mutation"
+            )
         )
-    )
 
     result = PostgresAuditRepository(db_session).verify_integrity()
 

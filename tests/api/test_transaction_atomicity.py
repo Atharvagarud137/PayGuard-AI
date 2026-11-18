@@ -192,19 +192,8 @@ def _seed_card(factory, card_id: str, balance: Decimal) -> None:
 def _cleanup_card(factory, card_id: str) -> None:
     """Remove committed records created by an independent-session test."""
     with factory() as db:
-        db.execute(
-            text(
-                "SELECT set_config("
-                "'payguard.allow_audit_delete', 'on', true)"
-            )
-        )
         transaction_ids = select(TransactionDB.id).where(
             TransactionDB.card_id == card_id
-        )
-        db.execute(
-            delete(AuditEventDB).where(
-                AuditEventDB.transaction_id.in_(transaction_ids)
-            )
         )
         db.execute(
             delete(TransactionEventDB).where(

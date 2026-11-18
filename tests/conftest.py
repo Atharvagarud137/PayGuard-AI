@@ -55,6 +55,28 @@ def test_engine() -> Generator[Engine, None, None]:
         engine.dispose()
 
 
+
+@pytest.fixture(scope="session")
+def migration_engine() -> Generator[Engine, None, None]:
+    """
+    Open a separate maintenance connection for migration-owner-only tests.
+
+    This connection is reserved for tests that deliberately exercise owner
+    powers, such as disabling a trigger to simulate out-of-band tampering.
+    Application code and ordinary API tests must use test_engine instead.
+    """
+    migration_url = os.getenv("PAYGUARD_MIGRATION_DATABASE_URL")
+    if not migration_url:
+        raise RuntimeError(
+            "PAYGUARD_MIGRATION_DATABASE_URL is required for maintenance tests."
+        )
+
+    engine = create_engine(migration_url, pool_pre_ping=True)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
 @pytest.fixture(scope="session", autouse=True)
 def verify_migrated_test_schema(
         test_engine: Engine,
