@@ -4,7 +4,7 @@ from threading import Barrier
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database_models import (

@@ -187,32 +187,51 @@ def test_audit_integrity_endpoint_reports_a_valid_chain(
     assert response.json()["first_invalid_sequence"] is None
 
 
+def _create_committed_audit_event():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        card_response = client.post(
+            "/api/v1/cards",
+            json={
+                "cardholder_name": "Synthetic Audit Test User",
+                "network": "VISA",
+                "initial_balance": "5000.00",
+                "expiry_date": "12/2030",
+            },
+        )
+        assert card_response.status_code == 201
+        authorization = client.post(
+            "/api/v1/transactions/authorize",
+            json={
+                "card_id": card_response.json()["card_id"],
+                "amount": 100,
+                "merchant_id": "merchant-audit-maintenance-test",
+            },
+        )
+        assert authorization.status_code == 200
+
+
 def test_audit_rows_reject_updates_deletes_and_truncate(
-        client,
-        issued_card,
-        db_session,
+        test_engine,
         migration_engine,
 ):
+    import pytest
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
-    import pytest
+    from sqlalchemy.orm import Session
 
-    authorization = client.post(
-        "/api/v1/transactions/authorize",
-        json={
-            "card_id": issued_card["card_id"],
-            "amount": 100,
-            "merchant_id": "merchant-audit-immutable",
-        },
-    )
-    assert authorization.status_code == 200
+    _create_committed_audit_event()
 
-    audit_event_id = db_session.execute(
-        text(
-            "SELECT id FROM audit_events "
-            "ORDER BY chain_sequence DESC LIMIT 1"
-        )
-    ).scalar_one()
+    with Session(test_engine) as db:
+        audit_event_id = db.execute(
+            text(
+                "SELECT id FROM audit_events "
+                "ORDER BY chain_sequence DESC LIMIT 1"
+            )
+        ).scalar_one()
 
     # Use the migration-owner connection to prove the trigger, rather than
     # runtime table privileges, rejects mutation attempts.
@@ -228,7 +247,7 @@ def test_audit_rows_reject_updates_deletes_and_truncate(
                         {"event_id": audit_event_id},
                     )
 
-            # The historical custom GUC must not grant a delete exception.
+            # A caller-settable custom GUC must not grant a delete exception.
             maintenance.execute(
                 text(
                     "SELECT set_config("
@@ -248,26 +267,17 @@ def test_audit_rows_reject_updates_deletes_and_truncate(
 
 
 def test_audit_hash_chain_detects_out_of_band_tampering(
-        client,
-        issued_card,
-        db_session,
+        test_engine,
         migration_engine,
 ):
     from sqlalchemy import text
+    from sqlalchemy.orm import Session
 
     from app.repositories.postgres_audit_repository import (
         PostgresAuditRepository,
     )
 
-    authorization = client.post(
-        "/api/v1/transactions/authorize",
-        json={
-            "card_id": issued_card["card_id"],
-            "amount": 100,
-            "merchant_id": "merchant-audit-tamper",
-        },
-    )
-    assert authorization.status_code == 200
+    _create_committed_audit_event()
 
     # Only the migration owner can disable a trigger. This simulates an
     # out-of-band privileged database compromise, not a runtime operation.
@@ -291,7 +301,8 @@ def test_audit_hash_chain_detects_out_of_band_tampering(
             )
         )
 
-    result = PostgresAuditRepository(db_session).verify_integrity()
+    with Session(test_engine) as db:
+        result = PostgresAuditRepository(db).verify_integrity()
 
     assert result["valid"] is False
     assert result["first_invalid_sequence"] == 1
