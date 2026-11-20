@@ -8,7 +8,7 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 ## Current status (15 November 2026)
 
-The five implementation chunks in Phase 2 are complete. The latest verified pre-documentation commit is [`c1be065`](https://github.com/Atharvagarud137/PayGuard-AI/commit/c1be0651fd3503f12e06061755e39228f32950e0). GitHub Actions [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045) completed successfully on 14 November 2026.
+Phase 2 and the current five-day security/documentation review are in progress. Day 1 (audit-history preservation) and Day 2 (migration/runtime role separation) are implemented. The latest verified CI run for Day 2 is [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973), which completed successfully on 18 November 2026.
 
 | Area | Current state |
 |---|---|
@@ -19,15 +19,15 @@ The five implementation chunks in Phase 2 are complete. The latest verified pre-
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| API/unit CI | 142 passed, 1 warning |
-| Browser E2E CI | 6 passed, 2 warnings |
-| Dependency audits | pip-audit and npm audit passed; no known vulnerabilities reported in run #39 |
+| API/unit CI | 143 passed, 1 warning (run #44243773973) |
+| Browser E2E CI | 6 passed, 2 warnings (run #44243773973) |
+| Dependency audits | Passed in run #44243773973 |
 | AI RCA / test generation | Planned, not implemented |
 | OpenTelemetry / metrics | Not implemented |
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
 | PCI DSS | No assessment or compliance claim |
 
-The test counts above are the results recorded in CI run #39, not a promise that future runs will produce the same result. Warnings remain in the CI logs.
+The counts above are the results of CI run #44243773973 on the Day 2 commit. They are evidence for that commit, not a guarantee about future runs. Warnings remain in the CI logs.
 
 ## Payment lifecycle
 
