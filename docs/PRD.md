@@ -128,3 +128,32 @@ These are historical CI results for that commit. The documentation-only commit h
 6. Evaluate AI RCA and test suggestions after reliability/observability gaps are addressed.
 
 No PCI DSS compliance, regulatory certification or production payment capability is claimed.
+
+
+## Pivot direction: Payment Integration Reliability Lab
+
+**Approved roadmap direction (20 November 2026; implementation not yet started):** PayGuard evolves from a mock gateway into a tool for testing integrations against controlled, repeatable payment failures. The simulator remains a test fixture/provider, not the product in isolation.
+
+### Revised product promise
+Run reproducible payment scenarios—including ambiguous outcomes, retry/idempotency, webhook delivery faults and concurrency races—then evaluate observable behavior with deterministic assertions and exportable evidence.
+
+### Revised priority order
+1. Scenario definitions, typed schema and runner.
+2. Deterministic assertions, timeline and evidence records.
+3. Replay and report export.
+4. Stage-aware failure injection and ambiguous-outcome scenarios.
+5. Durable webhook events, dispatcher, retry, ordering and replay.
+6. Controlled concurrency testing and invariants.
+7. CLI, sample merchant target and one-command local setup.
+8. AI-assisted evidence interpretation only after a validated deterministic evidence pipeline.
+
+### Additional scope
+Scenario authoring/execution, run tracking, replay, assertions, evidence, failure injection, webhook delivery simulation and concurrency testing are intended scope. A CLI and sample merchant integration are planned usability components.
+
+### Updated non-goals
+Real payments or payment-network integration; real card data; PCI claims; production merchant payment processing; unrestricted generated code; autonomous payment decisions; microservices/Kubernetes; AI agents/RAG/embeddings during the 30-day roadmap.
+
+### Acceptance and release policy
+All features remain planned until implemented and tested. Scenario results must be deterministic where declared, reproducible from recorded metadata, and accompanied by explicit assertions and evidence. AI output, if later introduced, must distinguish observations from hypotheses and remain advisory.
+
+See [30-day roadmap](ROADMAP_30_DAY_RELIABILITY_LAB.md) for daily tasks and gates. README must record significant milestones and CI evidence.
