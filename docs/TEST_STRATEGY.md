@@ -118,3 +118,32 @@ See [SETUP.md](SETUP.md) for database environment variables and the E2E reset-to
 - No AI RCA or AI-generated test validation is implemented.
 
 No PCI DSS compliance or production payment capability is claimed.
+
+
+## Target reliability-scenario testing strategy (planned)
+
+The test strategy will evolve from endpoint/regression coverage toward evidence that scenario-defined invariants hold under controlled conditions. These capabilities are planned, not yet implemented.
+
+### Scenario test layers
+- **Schema/unit:** definition validation, step types, assertion types, canonical serialization and scenario-version rules.
+- **Runner integration:** lifecycle, step sequencing, deterministic outcomes, failure handling and evidence persistence.
+- **Replay:** re-execution with recorded seed/parameters and comparison of expected observable behavior.
+- **Ambiguous outcomes:** request failure before processing, during processing and after commit, with stage semantics explicitly tested.
+- **Idempotency/retry:** same key/same payload, same key/conflicting payload, retry after response loss and concurrent duplicates.
+- **Webhook:** duplicate, delayed, out-of-order, failed, retry-exhausted and replay delivery.
+- **Concurrency:** barrier-controlled races with invariant assertions, not arbitrary sleep-based timing.
+- **Recovery:** worker restart, pending-job recovery and durable-state checks where implemented.
+- **Evidence/reporting:** assertions, event timelines, sanitized records, reproducibility metadata and report schema.
+
+### Invariant-focused examples
+- One logical operation for a replayed idempotent request.
+- Refund/capture totals never exceed modeled limits in tested schedules.
+- Duplicate webhook delivery does not cause duplicate handling in the sample receiver.
+- Out-of-order events are either safely handled or the scenario reports the defined failure.
+- A committed operation whose response is lost is discoverable/replayable through the intended contract.
+
+### Evidence requirements
+Every scenario report should identify scenario/version, execution ID, inputs/parameters, expected assertions, observed results, timestamps, step outcomes and sanitized evidence. AI-generated explanations, if later used, are evaluated separately from deterministic test verdicts.
+
+### CI policy
+Each daily increment adds relevant regression coverage and runs existing CI. Failures block the next roadmap task. Never infer results from a commit or claim tests pass without run evidence.
