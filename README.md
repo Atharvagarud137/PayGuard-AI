@@ -1,12 +1,12 @@
 # PayGuard-AI
 
-**A synthetic payment-system testing and reliability platform.**
+**A Payment Integration Reliability Lab for reproducible synthetic payment failure testing.**
 
 PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScript dashboard, and automated tests. It is a software-testing simulation, not a payment processor. It does not connect to Visa, Mastercard, an acquirer, a bank, or a production payment network.
 
 > **Data boundary:** use synthetic test data only. Do not submit or store real PANs, CVVs/CVCs, cardholder data, payment credentials, or production transaction data.
 
-## Current status (15 November 2026)
+## Current status (20 November 2026)
 
 Phase 2 and the current five-day security/documentation review are in progress. Day 1 (audit-history preservation) and Day 2 (migration/runtime role separation) are implemented. The latest verified CI run for Day 2 is [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973), which completed successfully on 18 November 2026.
 
@@ -27,7 +27,7 @@ Phase 2 and the current five-day security/documentation review are in progress. 
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
 | PCI DSS | No assessment or compliance claim |
 
-The counts above are the results of CI run #44243773973 on the Day 2 commit. They are evidence for that commit, not a guarantee about future runs. Warnings remain in the CI logs.
+The counts above are the results of CI run #44243773973 on the Day 2 commit. They are evidence for that commit, not a guarantee about future runs. Warnings remain in the CI logs. CI for latest documentation commit 51df88f had not yet returned status checks when this pivot plan was drafted.
 
 ## Payment lifecycle
 
@@ -153,14 +153,36 @@ npm run lint
 
 CI run #39 used Python 3.12, PostgreSQL 16 and Node.js 22. It ran the Python unit/API suite, Playwright Chromium E2E suite, `pip-audit`, and `npm audit --audit-level=high`.
 
-**Important test-database warning:** `tests/conftest.py` creates ORM tables and drops them at session teardown. Point tests only at a disposable, dedicated test database. Do not point the test suite at a development or production database. Alembic migrations must be applied before tests that exercise database triggers.
+**Test-database warning:** fixtures require an already-migrated disposable PostgreSQL database and do not create or drop ORM tables. Point tests only at a dedicated disposable database, never a development or production database.
 
 ## Current limitations and roadmap
 
-1. Complete documentation review and final project assessment.
-2. Improve production deployment configuration, including an authenticated dashboard client, secret rotation, HTTPS and gateway-level rate limiting.
-3. Add operational metrics/tracing and better failure artifacts.
-4. Evaluate migration/test-database lifecycle ergonomics.
-5. Consider AI RCA and test suggestions only after deterministic reliability and observability needs are met.
+1. Verify the current documentation commit and complete the readiness gate.
+2. Pivot into a Payment Integration Reliability Lab: scenario engine, deterministic assertions, structured evidence and replay.
+3. Implement ambiguous outcomes and retry/idempotency scenarios.
+4. Implement durable webhook simulation, retries, ordering and delivery evidence.
+5. Add controlled concurrency/race testing and invariant-based reports.
+6. Add CLI, sample merchant target and Docker Compose usability.
+7. Consider evidence-grounded AI assistance only after the deterministic reliability lab is established.
 
 No PCI DSS compliance, production payment capability, regulatory certification, or unrestricted exactly-once processing is claimed.
+
+
+## Product pivot: Payment Integration Reliability Lab
+
+PayGuard-AI's product direction is now to test how integrations behave under reproducible failure conditions, rather than expand the simulated gateway as an end in itself. The simulator remains infrastructure inside the lab.
+
+The planned core capabilities are scenario execution, controlled ambiguous outcomes (such as commit followed by response loss), retry/idempotency testing, durable webhook simulation, concurrency/race testing, deterministic assertions, structured evidence, replay and exportable reports. AI analysis is deferred until the deterministic runner and evidence pipeline are mature.
+
+**This pivot is a roadmap, not a claim that these features already exist.** The current implementation remains the synthetic payment lifecycle and reliability foundation described above.
+
+### Roadmap and daily updates
+
+- [30-day daily implementation roadmap](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md): planned daily increments, gates, deliverables and acceptance criteria.
+- [Product requirements](docs/PRD.md): updated product direction, scope and non-goals.
+- [Architecture](docs/ARCHITECTURE.md): current architecture and planned scenario-lab evolution.
+- [Test strategy](docs/TEST_STRATEGY.md): current evidence and target scenario-testing strategy.
+- [API specification](docs/API_SPEC.md): current API contract only; proposed scenario APIs are not implemented contracts.
+- [AI pipeline](docs/AI_PIPELINE.md): AI is deferred and evidence-grounded, not an immediate build priority.
+
+**Daily execution rule:** each day's work is committed directly to main only after inspecting the latest commit and CI. A failing CI run blocks the next planned day's task. README status, evidence and known limitations are updated on significant milestones. No PRs or history rewriting.
