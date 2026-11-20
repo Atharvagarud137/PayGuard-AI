@@ -13,7 +13,7 @@
 | SQLAlchemy | ORM and database sessions | Implemented (`>=2.0,<3.0`) |
 | psycopg 3 | PostgreSQL driver | Implemented (`>=3.2,<4.0`) |
 | PostgreSQL | Durable payment, event, audit and idempotency state | Implemented; CI uses PostgreSQL 16 |
-| Alembic | Schema migrations | Implemented; current migration head is `003_audit_truncate_guard` |
+| Alembic | Schema migrations | Implemented; current migration head is `005_audit_reference_without_fk` |
 | python-dotenv | Environment configuration dependency | Present in requirements |
 
 The backend is a modular monolith. Payment services depend on repository interfaces; the active API wiring uses PostgreSQL repositories.
