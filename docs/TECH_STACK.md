@@ -1,6 +1,6 @@
 # PayGuard-AI technology stack
 
-**Status date: 15 November 2026.** Version ranges below come from the repository manifests. CI versions are noted separately; dependencies are not all pinned to one exact patch release.
+**Status date: 20 November 2026.** Version ranges below come from the repository manifests. CI versions are noted separately; dependencies are not all pinned to one exact patch release.
 
 ## Backend and persistence
 
@@ -61,9 +61,9 @@ The dashboard has overview, cards and transaction views. Its API client currentl
 | pip-audit | Python dependency vulnerability audit | Implemented in CI |
 | npm audit | Dashboard dependency vulnerability audit | Implemented in CI |
 
-The latest verified pre-documentation CI run is [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), on 14 November 2026:
+The latest verified CI run is [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973), on 18 November 2026:
 
-- Python unit/API: 142 passed, 1 warning.
+- Python unit/API: 143 passed, 1 warning.
 - Playwright E2E: 6 passed, 2 warnings.
 - Python and JavaScript dependency audits: passed; no known vulnerabilities reported.
 
