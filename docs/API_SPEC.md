@@ -1402,3 +1402,19 @@ AUTHORIZED REQUEST
 The API currently provides the simulated payment flow and reliability controls described in this specification. Remaining deployment concerns include per-user identity/RBAC, API-key rotation, HTTPS termination, external secret management and gateway-level rate limiting. AI-assisted failure analysis remains planned. The application does not claim PCI DSS compliance or production payment capability.
 
 
+
+
+## Future scenario-lab API (proposal only)
+
+The following is a product direction, not an implemented API contract. No endpoint names, schemas or response codes should be relied upon until the implementation and runtime OpenAPI validate them.
+
+Candidate API capabilities:
+- Create/validate scenario definitions.
+- List and retrieve scenario definitions and versions.
+- Execute a scenario and obtain a run identifier.
+- Inspect run status, steps, assertions and event timeline.
+- Replay a recorded run with reproducibility parameters.
+- Export JSON/Markdown/HTML evidence.
+- Manage synthetic webhook receiver configuration and delivery evidence in an isolated local environment.
+
+The actual runtime-generated OpenAPI in development/test remains authoritative. Proposed scenario endpoints must not be documented as available until implemented and tested.
