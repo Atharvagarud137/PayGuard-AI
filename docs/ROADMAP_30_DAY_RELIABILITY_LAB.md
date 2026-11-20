@@ -62,6 +62,17 @@ Run reproducible payment failure scenarios—including ambiguous outcomes, retry
 | 29 | 19 Dec | Docker Compose and UX | One-command local stack, setup and troubleshooting | Fresh-start setup verified; no secrets baked in |
 | 30 | 20 Dec | Release/readiness | Full verification, security review, docs, demo scenarios and public-readiness decision | CI evidence, known limitations, release/no-release decision |
 
+## LinkedIn project documentation (integrated into delivery)
+
+Build a truthful public engineering narrative alongside implementation. This is a documentation/content deliverable, not a substitute for engineering work.
+
+- Prepare **8 milestone post drafts**, tentatively aligned to Days 1, 7, 10, 16, 22, 26, 29 and 30 (adjust dates if milestones move).
+- Draft each post only after verifying the actual work, commit, tests and CI evidence. Clearly distinguish implemented functionality from planned work; do not inflate results, expose secrets, include sensitive details, or claim PCI/compliance/real processing.
+- Use a consistent story arc: project pivot and problem statement; scenario engine; first reproducible ambiguous-outcome slice; fault-injection/recovery learning; webhook reliability; concurrency and invariants; runnable demo; final retrospective and evidence.
+- Include concise post copy, a useful technical takeaway, relevant sanitized screenshots/diagram suggestions where available, and restrained hashtags. Avoid generic motivational filler and engagement bait.
+- **Draft and deliver posts for the user's review; do not publish to LinkedIn or schedule them externally without explicit authorization.**
+- Maintain the draft/post status in the roadmap (drafted, reviewed, published by user) without inventing publication status.
+
 ## Phase gates
 
 ### Gate A: Scenario engine (Days 2–10)
@@ -107,4 +118,4 @@ The deterministic runner and test results remain authoritative.
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
 | 1 | Scheduled | — | Pending | Baseline/readiness gate |
-| 2–30 | Planned | — | — | Daily increments; blocked by failing CI |
+| 2–30 | Planned | — | — | Daily increments; blocked by failing CI |\n| LinkedIn posts | Planned | — | — | 8 evidence-grounded milestone drafts; publication remains user-controlled |
