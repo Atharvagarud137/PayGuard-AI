@@ -117,14 +117,17 @@ The deterministic runner and test results remain authoritative.
 
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
-| 1 | In progress (blocked on local execution access) | — | GitHub CI run #73 verified green; local full-suite/security review not run from this environment | Repository inspected; CI evidence confirmed; cannot run local commands without repository execution environment |
-| 2–30 | Planned | — | — | Daily increments; blocked by failing CI |\n| LinkedIn posts | Day 1 draft pending baseline completion | — | Draft must remain strictly factual | 8 evidence-grounded milestone drafts; publication remains user-controlled |
+| 1 | In progress (blocked on local PostgreSQL test service) | — | GitHub CI run [#75](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44719567377) passed all three jobs; local compileall, Alembic head/history, and dashboard production build passed; local pytest could not initialize without a database URL | Checkout and terminal are available. `pytest-results.txt` records 149 fixture setup errors caused by missing `TEST_DATABASE_URL`/`DATABASE_URL`; Docker daemon access is denied. No test assertions ran in that report. |
+| 2–30 | Planned | — | — | Do not advance until the Day 1 local PostgreSQL test environment is available and baseline review is complete. CI is green. |
+| LinkedIn posts | Day 1 draft pending baseline completion | — | Draft must remain strictly factual | 8 evidence-grounded milestone drafts; publication remains user-controlled |
 
 
 ## Day 1 baseline record (20 November 2026)
 
-- **Verified head:** `09e64e1c75f0b37809c86fbb9431bff929e9dbb7` (`docs: add LinkedIn milestone content plan`).
-- **CI:** GitHub Actions run [#73](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44699403332) completed successfully. Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit all reported success.
-- **Combined commit status API:** returned no individual status entries; the workflow run and its three jobs were inspected directly.
-- **Limit:** this environment can inspect GitHub and CI but does not provide an authorized repository checkout/terminal to run the local full test suite, inspect all source files in depth, or execute local security tooling. Day 1 is therefore not yet complete. This is a tooling blocker, not a claim that local tests passed.
-- **Next:** obtain an executable repository workspace, perform the full baseline review, and only then unblock Day 2.
+- **Verified head:** `c45efd619acb7e2be3cfa033e994a21602b46642` (`docs: update README with Day 1 CI status`), on local `main` and matching `origin/main` at inspection time.
+- **Working tree:** the only pre-existing local change is untracked `pytest-results.txt`; it was preserved.
+- **CI:** GitHub Actions run [#75](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44719567377) for the verified head completed successfully. Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit all reported success.
+- **Local checks completed:** `.venv` Python `compileall -q app tests`, `alembic heads`, `alembic history`, and `npm run build` in `dashboard` all exited successfully.
+- **Local pytest blocker:** no `TEST_DATABASE_URL` or `DATABASE_URL` is configured. The existing `pytest-results.txt` records 149 setup errors at the shared PostgreSQL fixture, before test assertions could execute. Docker is installed but access to the Docker Desktop daemon is denied in this environment. No local pytest pass is claimed.
+- **Security/readiness evidence:** CI's dependency audit and its tests for runtime DB privileges/security completed successfully on this commit. The local CI workflow was reviewed and confirms PostgreSQL service/migrations are prerequisites for both test suites.
+- **Next:** provide a reachable disposable PostgreSQL test database (or enable Docker daemon access), then run the local test suites and finish the baseline review before starting Day 2. This is an environment blocker; CI is green.

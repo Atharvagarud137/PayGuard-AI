@@ -8,7 +8,7 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 ## Current status (20 November 2026)
 
-Phase 2 and the current five-day security/documentation review are in progress. Day 1 (audit-history preservation) and Day 2 (migration/runtime role separation) are implemented. The latest verified CI run for Day 2 is [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973), which completed successfully on 18 November 2026.
+The 30-day Payment Integration Reliability Lab roadmap is active. Day 1 baseline review is in progress and blocked on local PostgreSQL test access. The latest verified `main` commit is `c45efd6`; GitHub Actions [run #75](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44719567377) passed the Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit jobs.
 
 | Area | Current state |
 |---|---|
@@ -19,15 +19,15 @@ Phase 2 and the current five-day security/documentation review are in progress. 
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| API/unit CI | 143 passed, 1 warning (run #44243773973) |
-| Browser E2E CI | 6 passed, 2 warnings (run #44243773973) |
-| Dependency audits | Passed in run #44243773973 |
+| API/unit CI | Passed in run #75 for `c45efd6` |
+| Browser E2E CI | Passed in run #75 for `c45efd6` |
+| Dependency audits | Passed in run #75 for `c45efd6` |
 | AI RCA / test generation | Planned, not implemented |
 | OpenTelemetry / metrics | Not implemented |
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
 | PCI DSS | No assessment or compliance claim |
 
-The counts above are the results of CI run #44243773973 on the Day 2 commit. They are evidence for that commit, not a guarantee about future runs. Warnings remain in the CI logs. The latest docs commit `09e64e1` (LinkedIn content-plan update) was verified by CI run [#73](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44699403332), with all three jobs successful: Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit. This confirms that CI for that commit passed, but does not replace a local full repository review.
+These CI results apply to `c45efd6`; they do not guarantee future runs. Local Python syntax compilation, Alembic head/history checks, and the dashboard production build completed successfully during the Day 1 review. Local pytest remains unverified because no test database URL is configured and Docker daemon access is denied. The existing `pytest-results.txt` records 149 setup errors at the shared PostgreSQL fixture, before test assertions ran. See [the roadmap baseline record](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md) for evidence and the blocker.
 
 ## Payment lifecycle
 
