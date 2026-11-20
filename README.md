@@ -8,7 +8,7 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 ## Current status (20 November 2026)
 
-The 30-day Payment Integration Reliability Lab roadmap is active. Day 1 baseline review is in progress and blocked on local PostgreSQL test access. The latest verified `main` commit is `c45efd6`; GitHub Actions [run #75](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44719567377) passed the Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit jobs.
+The 30-day Payment Integration Reliability Lab roadmap is active. The Day 1 baseline review is complete. GitHub Actions [run #76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) passed the Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit jobs for commit `fb18505`.
 
 | Area | Current state |
 |---|---|
@@ -19,15 +19,15 @@ The 30-day Payment Integration Reliability Lab roadmap is active. Day 1 baseline
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| API/unit CI | Passed in run #75 for `c45efd6` |
-| Browser E2E CI | Passed in run #75 for `c45efd6` |
-| Dependency audits | Passed in run #75 for `c45efd6` |
+| API/unit | 143 passed locally; CI passed in run #76 |
+| Browser E2E | Passed in CI run #76; not run locally because another project occupies the fixed backend port 8000 |
+| Dependency audits | Passed in run #76 |
 | AI RCA / test generation | Planned, not implemented |
 | OpenTelemetry / metrics | Not implemented |
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
 | PCI DSS | No assessment or compliance claim |
 
-These CI results apply to `c45efd6`; they do not guarantee future runs. Local Python syntax compilation, Alembic head/history checks, and the dashboard production build completed successfully during the Day 1 review. Local pytest remains unverified because no test database URL is configured and Docker daemon access is denied. The existing `pytest-results.txt` records 149 setup errors at the shared PostgreSQL fixture, before test assertions ran. See [the roadmap baseline record](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md) for evidence and the blocker.
+These results apply to the reviewed commit; they do not guarantee future runs. Local Python syntax compilation, Alembic head/history checks, the dashboard production build, and all 143 Python unit/API tests completed successfully. The prior `pytest-results.txt` run recorded 149 setup errors because no database URL was configured; those errors preceded test assertions and were resolved by using an isolated disposable PostgreSQL container. Local browser E2E was skipped because port 8000 is used by another project; its CI job passed. See [the roadmap baseline record](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md) for details.
 
 ## Payment lifecycle
 

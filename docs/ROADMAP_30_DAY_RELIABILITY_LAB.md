@@ -117,17 +117,18 @@ The deterministic runner and test results remain authoritative.
 
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
-| 1 | In progress (blocked on local PostgreSQL test service) | — | GitHub CI run [#75](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44719567377) passed all three jobs; local compileall, Alembic head/history, and dashboard production build passed; local pytest could not initialize without a database URL | Checkout and terminal are available. `pytest-results.txt` records 149 fixture setup errors caused by missing `TEST_DATABASE_URL`/`DATABASE_URL`; Docker daemon access is denied. No test assertions ran in that report. |
-| 2–30 | Planned | — | — | Do not advance until the Day 1 local PostgreSQL test environment is available and baseline review is complete. CI is green. |
+| 1 | Complete | [`fb18505`](https://github.com/Atharvagarud137/PayGuard-AI/commit/fb18505f30e72cbb3016b5fecff7267d53a42416) | GitHub CI run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) passed all three jobs; 143 local unit/API tests passed; compileall, Alembic head/history, and dashboard build passed | Local E2E not run because another project owns fixed port 8000; E2E passed in CI. Previous pytest log's 149 errors were database setup errors and did not execute assertions. |
+| 2–30 | Planned | — | — | Day 2 is unblocked; continue one daily increment at a time. |
 | LinkedIn posts | Day 1 draft pending baseline completion | — | Draft must remain strictly factual | 8 evidence-grounded milestone drafts; publication remains user-controlled |
 
 
 ## Day 1 baseline record (20 November 2026)
 
-- **Verified head:** `c45efd619acb7e2be3cfa033e994a21602b46642` (`docs: update README with Day 1 CI status`), on local `main` and matching `origin/main` at inspection time.
+- **Verified baseline commit:** `fb18505f30e72cbb3016b5fecff7267d53a42416` (`docs: record Day 1 baseline blockers`), on `main` and pushed to `origin/main`.
 - **Working tree:** the only pre-existing local change is untracked `pytest-results.txt`; it was preserved.
-- **CI:** GitHub Actions run [#75](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44719567377) for the verified head completed successfully. Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit all reported success.
-- **Local checks completed:** `.venv` Python `compileall -q app tests`, `alembic heads`, `alembic history`, and `npm run build` in `dashboard` all exited successfully.
-- **Local pytest blocker:** no `TEST_DATABASE_URL` or `DATABASE_URL` is configured. The existing `pytest-results.txt` records 149 setup errors at the shared PostgreSQL fixture, before test assertions could execute. Docker is installed but access to the Docker Desktop daemon is denied in this environment. No local pytest pass is claimed.
-- **Security/readiness evidence:** CI's dependency audit and its tests for runtime DB privileges/security completed successfully on this commit. The local CI workflow was reviewed and confirms PostgreSQL service/migrations are prerequisites for both test suites.
-- **Next:** provide a reachable disposable PostgreSQL test database (or enable Docker daemon access), then run the local test suites and finish the baseline review before starting Day 2. This is an environment blocker; CI is green.
+- **CI:** GitHub Actions run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) completed successfully. Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit all reported success.
+- **Local checks completed:** `.venv` Python `compileall -q app tests`, `alembic heads`, `alembic history`, and dashboard `npm run build` all exited successfully. The Python unit and API suite reported **143 passed in 5.04s** against a disposable PostgreSQL 16 container, initialized with CI-equivalent migration and runtime roles.
+- **E2E limitation:** local E2E was not run because the suite hardcodes backend port 8000, already used by another running project. Those containers were left untouched. The dashboard E2E job passed in CI run #76.
+- **Security/readiness evidence:** CI dependency audits and the tests for runtime DB privileges/security completed successfully. The CI workflow and test setup were reviewed; both test suites depend on a migrated PostgreSQL database.
+- **Cleanup:** the disposable `payguard-day1-postgres-20261120` container was stopped and removed. It had no mounted volumes; other Docker containers were left running.
+- **Next:** proceed to Day 2. The old `pytest-results.txt` remains as an untracked local artifact and was not modified.
