@@ -125,3 +125,48 @@ The CI workflow uses separate PostgreSQL services for the Python/API and E2E job
 - AI root-cause analysis and test-case suggestions, only after the deterministic foundation is sufficient.
 
 No PCI DSS compliance or production payment capability is claimed.
+
+
+## Target architecture: reliability scenario lab (planned)
+
+The existing modular monolith and PostgreSQL foundation remain. The pivot introduces a scenario execution subsystem rather than a rewrite or service split.
+
+```text
+Scenario Definition -> Scenario Runner -> Execution Engine
+                                          |
+                 +------------------------+-------------------------+
+                 |                        |                       |
+          Simulated Provider        Failure Injector        Concurrency Harness
+                 |                        |                       |
+                 +------------------------+-------------------------+
+                                          |
+                                    PostgreSQL evidence
+                                          |
+                 +------------------------+-------------------------+
+                 |                        |                       |
+             Assertion Engine        Timeline/Artifacts       Webhook Worker
+                 |                        |                       |
+                 +------------------------+-------------------------+
+                                          |
+                                  Report/Replay/CLI
+                                          |
+                            Future advisory AI analysis
+```
+
+### Planned boundaries
+- **Scenario schema:** typed, validated definitions; no arbitrary user code execution.
+- **Runner:** orchestration, lifecycle and recorded execution metadata.
+- **Execution engine:** deterministic step execution and controlled synchronization.
+- **Failure injector:** stage-specific faults (for example, response loss after commit), scoped to a run/step.
+- **Assertion engine:** deterministic assertions against observable results and evidence.
+- **Evidence:** run ID, scenario/version, step sequence, timestamps, request/operation identifiers, observed state, assertion outcomes and sanitized metadata.
+- **Webhook subsystem:** durable event/outbox record and worker, delivery attempt tracking, bounded retries and dead-letter state.
+- **Concurrency harness:** barrier-controlled concurrent operations and invariant checks.
+- **Reports/replay:** machine-readable result format, reproduction metadata and export.
+- **AI:** future advisory consumer of structured evidence; no direct control of payment mutations or runner execution.
+
+### Planned persistence and consistency considerations
+Scenario definition/version, run state, step results, assertions and evidence need explicit retention and migration design. Payment state changes and corresponding simulated webhook/outbox events should commit atomically. Workers must tolerate retries and duplicate execution through durable job state and idempotent handling. These designs are not implemented yet and will be validated in incremental ADRs/tests.
+
+### Design constraints
+Keep a modular monolith; do not introduce microservices, Kubernetes or a distributed broker without demonstrated need. Keep synthetic data. Do not claim universal exactly-once processing. Record reproducibility parameters and distinguish deterministic from nondeterministic inputs.
