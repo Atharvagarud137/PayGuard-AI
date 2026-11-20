@@ -1,6 +1,6 @@
 # PayGuard-AI architecture
 
-**Status date: 15 November 2026.** This document describes the implementation at `main` commit `c1be0651fd3503f12e06061755e39228f32950e0`. AI workflows, production deployment hardening and distributed operations remain future work.
+**Status date: 20 November 2026.** This document reflects the current PostgreSQL implementation and the Day 2 least-privilege database role split. AI workflows, production deployment hardening and distributed operations remain future work.
 
 ## System boundary
 
@@ -33,6 +33,10 @@ PaymentService + transaction state machine
 ```
 
 The backend is a modular monolith. The HTTP layer coordinates requests and transactions; payment rules live in the service/domain layer; repositories translate domain objects to PostgreSQL models. The dashboard calls the HTTP API and does not access the database directly.
+
+## Database role separation
+
+Schema migrations use the explicitly configured `PAYGUARD_MIGRATION_DATABASE_URL` and the `payguard_migrator` role. The runtime/API process uses `DATABASE_URL` and the restricted `payguard_app` role. The runtime role is not the table owner and does not receive schema CREATE, audit UPDATE/DELETE/TRUNCATE or trigger-management privileges. Test fixtures no longer create or drop schema objects; schema setup is a separate migration step. This separation reduces the privileges available to the application process but does not protect against the migration owner or PostgreSQL superuser.
 
 ## Persistence model
 
@@ -106,11 +110,11 @@ The root endpoint is a basic liveness response, not a database readiness check.
 
 The test suite includes unit, API/PostgreSQL integration, concurrency, rollback, security/redaction, audit-integrity and Playwright browser tests. CI run [#39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045) on 14 November 2026 recorded:
 
-- Python unit/API: 142 passed, 1 warning.
+- Python unit/API: 143 passed, 1 warning.
 - Playwright Chromium E2E: 6 passed, 2 warnings.
 - Python and JavaScript dependency audits: passed; no known vulnerabilities reported.
 
-The CI workflow uses separate PostgreSQL services for the Python/API and E2E jobs. The test fixtures drop ORM tables at session teardown, so local tests must use disposable dedicated databases.
+The CI workflow uses separate PostgreSQL services for the Python/API and E2E jobs. Test fixtures verify that the schema is already migrated and use the restricted runtime role; they do not create or drop schema tables. Migration-owner operations are separated from runtime test execution.
 
 ## Planned architecture
 
