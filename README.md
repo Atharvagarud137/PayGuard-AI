@@ -176,6 +176,10 @@ The planned core capabilities are scenario execution, controlled ambiguous outco
 
 **This pivot is a roadmap, not a claim that these features already exist.** The current implementation remains the synthetic payment lifecycle and reliability foundation described above.
 
+### LinkedIn build-in-public plan
+
+The 30-day roadmap includes eight LinkedIn milestone-post drafts aligned to verified project progress (target milestones: Days 1, 7, 10, 16, 22, 26, 29 and 30). Posts will share concrete engineering decisions, test evidence, lessons and demo material, while clearly distinguishing planned from implemented work. Drafts are prepared for review; nothing is published or externally scheduled without explicit authorization.
+
 ### Roadmap and daily updates
 
 - [30-day daily implementation roadmap](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md): planned daily increments, gates, deliverables and acceptance criteria.
