@@ -1,6 +1,6 @@
 # PayGuard-AI product requirements
 
-**Status date: 15 November 2026.**
+**Status date: 20 November 2026.**
 
 ## Product overview
 
@@ -110,9 +110,9 @@ These criteria describe tested scenarios, not a guarantee of exactly-once behavi
 
 ## Verified test evidence
 
-GitHub Actions [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), associated with commit `c1be0651fd3503f12e06061755e39228f32950e0), completed successfully on 14 November 2026:
+GitHub Actions [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973), associated with commit `a7016a85cc0b7e275d10ced0ae38cd444c9d46f0`, completed successfully on 18 November 2026:
 
-- 142 Python unit/API tests passed (1 warning).
+- 143 Python unit/API tests passed (1 warning).
 - 6 Playwright E2E tests passed (2 warnings).
 - `pip-audit` and `npm audit --audit-level=high` passed with no known vulnerabilities reported.
 
