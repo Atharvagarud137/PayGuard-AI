@@ -82,3 +82,20 @@ Warnings include the Starlette TestClient/httpx deprecation, a pytest fixture de
 Use `requirements.txt` and `dashboard/package-lock.json` as the authoritative dependency inputs. CI installs the Python ranges from requirements and uses `npm ci` for the lockfile. Dependency audit results describe the state at the time of the run and must be refreshed regularly.
 
 No PCI DSS compliance, production payment capability or regulatory certification is claimed.
+
+
+## Target stack additions (planned; not implemented)
+
+| Component | Intended use | Status |
+|---|---|---|
+| Scenario schema/model | Typed definitions, steps and assertions | Planned |
+| Scenario runner | Orchestration and run lifecycle | Planned |
+| Structured evidence/report schema | Timeline, assertions and exports | Planned |
+| Durable webhook worker/outbox | Simulated event delivery and retries | Planned |
+| Concurrency harness | Controlled race testing | Planned |
+| CLI | Run/list/replay/export scenarios | Planned |
+| Sample merchant integration | End-to-end observable integration target | Planned |
+| Docker Compose | One-command local setup | Planned |
+| AI evidence analysis | Advisory summaries/hypotheses, later phase | Deferred |
+
+The 30-day roadmap deliberately does not add LangChain, LangGraph, embeddings, ChromaDB or an agent. AI adoption must be justified by a deterministic evidence pipeline and evaluation data.
