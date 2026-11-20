@@ -225,3 +225,8 @@ The current dashboard is not production-compatible with API-key enforcement beca
 - **Dashboard cannot reach API:** confirm backend port 8000, Vite port 5173, and development CORS defaults.
 - **401 from the API:** check `PAYGUARD_ENV` and whether a service key is configured. Send `X-API-Key` when a key is required.
 - **E2E reset fails:** ensure test mode, test endpoints enabled, and the exact same reset token in backend and pytest processes.
+
+
+## Planned one-command setup
+
+A supported Docker Compose environment is a roadmap item, not available setup currently. The target user experience is a one-command local synthetic lab startup with the API, PostgreSQL, scenario runner/worker and optional dashboard. The Compose design must keep migration ownership separate from runtime privileges, use local synthetic credentials, expose no production secrets and make test reset/failure injection unavailable in production configurations. Until this is delivered and tested, follow the manual setup above.
