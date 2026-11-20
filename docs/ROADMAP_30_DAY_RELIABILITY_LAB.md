@@ -1,7 +1,7 @@
 # PayGuard-AI: 30-Day Product Pivot Roadmap
 
-**Plan begins:** 21 November 2026 (Day 1)  
-**Planning window:** 21 November–20 December 2026  
+**Plan begins:** 20 November 2026 (Day 1)  
+**Planning window:** 20 November–19 December 2026  
 **Delivery model:** One meaningful, verified direct commit to `main` per working day.  
 **Working assumption:** roughly 2–3 hours on weekdays, longer sessions on weekends where practical.
 
@@ -31,36 +31,36 @@ Run reproducible payment failure scenarios—including ambiguous outcomes, retry
 
 | Day | Date | Focus | Daily commit/deliverable | Acceptance / evidence |
 |---|---|---|---|---|
-| 1 | 21 Nov | Baseline gate | Verify latest docs commit CI; full repository, security, test and readiness review; record blockers | Latest CI verified; no critical blocker hidden; baseline documented |
-| 2 | 22 Nov | Pivot documentation and scope | Establish product language, goals/non-goals, scope and roadmap in docs | README and PRD agree; scenario-lab direction explicit |
-| 3 | 23 Nov | Scenario domain model | Typed scenario, step, assertion, run/result and status schemas | Schema validation tests; no arbitrary executable code |
-| 4 | 24 Nov | Scenario storage design | Design persisted scenario definitions and execution evidence; ADR | Model and migrations reviewed; migration/runtime separation retained |
-| 5 | 25 Nov | Scenario persistence | Persist scenario definitions and run records with migration/tests | CRUD persistence and validation tests pass |
-| 6 | 26 Nov | Scenario runner skeleton | Runner orchestration, lifecycle/status, deterministic step ordering | Basic scenario executes and records outcomes |
-| 7 | 27 Nov | Assertions | Assertion registry and deterministic assertion evaluation | Positive/negative assertion tests |
-| 8 | 28 Nov | Timeline/evidence | Structured event timeline, execution identifiers, evidence records | Run evidence can be queried and ordered |
-| 9 | 29 Nov | Report artifacts | JSON report and versioned report schema | Reports are stable, machine-readable and tested |
-| 10 | 30 Nov | Replay | Replay metadata and deterministic replay of selected scenario | Re-run reproducibility test; no claims for unseeded nondeterminism |
-| 11 | 1 Dec | Failure injection design | Stage-aware failure-injection model and ADR | Defined stages, safety boundaries, validation |
-| 12 | 2 Dec | Response loss after commit | Implement post-commit response-loss scenario | DB commit exists; response is lost; scenario captures evidence |
-| 13 | 3 Dec | Retry scenario | Same-key retry and response replay scenario | Single mutation and response replay assertions |
-| 14 | 4 Dec | Conflicting retry | Same key with changed payload scenario | Deterministic conflict; no mutation |
-| 15 | 5 Dec | Ambiguous outcome suite | Timeout-before/during/after-processing scenarios (only where deterministic stage semantics are supported) | Stage-specific assertions and tests |
-| 16 | 6 Dec | Crash/recovery seam | Add controlled interruption/recovery test seam; avoid unsafe production kill hooks | Recovery behavior verified in isolated tests |
-| 17 | 7 Dec | Webhook event model | Event schema, payload, delivery record and state model | Schema and lifecycle tests |
-| 18 | 8 Dec | Atomic outbox | Persist payment event/outbox job atomically for supported simulated events | Transaction rollback/atomicity tests |
-| 19 | 9 Dec | Webhook worker | Worker dispatch and configurable local receiver | Successful delivery and evidence |
-| 20 | 10 Dec | Retry policy | Backoff, bounded attempts, terminal/dead-letter status | Retry timing/state tests |
-| 21 | 11 Dec | Webhook fault scenarios | Duplicate, delayed and failed delivery controls | Deterministic webhook scenario tests |
-| 22 | 12 Dec | Ordering/signature | Out-of-order delivery and synthetic signing/verification | Ordering and invalid-signature tests |
-| 23 | 13 Dec | Concurrency harness | Barrier-controlled parallel execution and parameters | Harness reproducible without timing guesses |
-| 24 | 14 Dec | Idempotency races | Concurrent duplicate/conflicting-key scenario tests | Invariant assertions, evidence timeline |
-| 25 | 15 Dec | Lifecycle races | Capture/refund races and invariant validation | Amount/state invariants hold in tested cases |
-| 26 | 16 Dec | Evidence/report improvements | Failure classification, run summary and reproduction metadata | Reports explain assertion failures using facts |
-| 27 | 17 Dec | CLI | Minimal CLI to run/list/replay scenarios and export reports | CLI smoke tests; documented commands |
-| 28 | 18 Dec | Sample merchant target | Minimal synthetic sample integration/receiver for end-to-end demonstration | A scenario tests observable behavior of sample integration |
-| 29 | 19 Dec | Docker Compose and UX | One-command local stack, setup and troubleshooting | Fresh-start setup verified; no secrets baked in |
-| 30 | 20 Dec | Release/readiness | Full verification, security review, docs, demo scenarios and public-readiness decision | CI evidence, known limitations, release/no-release decision |
+| 1 | 20 Nov | Baseline gate | Verify latest docs commit CI; full repository, security, test and readiness review; record blockers | Latest CI verified; no critical blocker hidden; baseline documented |
+| 2 | 21 Nov | Pivot documentation and scope | Establish product language, goals/non-goals, scope and roadmap in docs | README and PRD agree; scenario-lab direction explicit |
+| 3 | 22 Nov | Scenario domain model | Typed scenario, step, assertion, run/result and status schemas | Schema validation tests; no arbitrary executable code |
+| 4 | 23 Nov | Scenario storage design | Design persisted scenario definitions and execution evidence; ADR | Model and migrations reviewed; migration/runtime separation retained |
+| 5 | 24 Nov | Scenario persistence | Persist scenario definitions and run records with migration/tests | CRUD persistence and validation tests pass |
+| 6 | 25 Nov | Scenario runner skeleton | Runner orchestration, lifecycle/status, deterministic step ordering | Basic scenario executes and records outcomes |
+| 7 | 26 Nov | Assertions | Assertion registry and deterministic assertion evaluation | Positive/negative assertion tests |
+| 8 | 27 Nov | Timeline/evidence | Structured event timeline, execution identifiers, evidence records | Run evidence can be queried and ordered |
+| 9 | 28 Nov | Report artifacts | JSON report and versioned report schema | Reports are stable, machine-readable and tested |
+| 10 | 29 Nov | Replay | Replay metadata and deterministic replay of selected scenario | Re-run reproducibility test; no claims for unseeded nondeterminism |
+| 11 | 30 Nov | Failure injection design | Stage-aware failure-injection model and ADR | Defined stages, safety boundaries, validation |
+| 12 | 1 Dec | Response loss after commit | Implement post-commit response-loss scenario | DB commit exists; response is lost; scenario captures evidence |
+| 13 | 2 Dec | Retry scenario | Same-key retry and response replay scenario | Single mutation and response replay assertions |
+| 14 | 3 Dec | Conflicting retry | Same key with changed payload scenario | Deterministic conflict; no mutation |
+| 15 | 4 Dec | Ambiguous outcome suite | Timeout-before/during/after-processing scenarios (only where deterministic stage semantics are supported) | Stage-specific assertions and tests |
+| 16 | 5 Dec | Crash/recovery seam | Add controlled interruption/recovery test seam; avoid unsafe production kill hooks | Recovery behavior verified in isolated tests |
+| 17 | 6 Dec | Webhook event model | Event schema, payload, delivery record and state model | Schema and lifecycle tests |
+| 18 | 7 Dec | Atomic outbox | Persist payment event/outbox job atomically for supported simulated events | Transaction rollback/atomicity tests |
+| 19 | 8 Dec | Webhook worker | Worker dispatch and configurable local receiver | Successful delivery and evidence |
+| 20 | 9 Dec | Retry policy | Backoff, bounded attempts, terminal/dead-letter status | Retry timing/state tests |
+| 21 | 10 Dec | Webhook fault scenarios | Duplicate, delayed and failed delivery controls | Deterministic webhook scenario tests |
+| 22 | 11 Dec | Ordering/signature | Out-of-order delivery and synthetic signing/verification | Ordering and invalid-signature tests |
+| 23 | 12 Dec | Concurrency harness | Barrier-controlled parallel execution and parameters | Harness reproducible without timing guesses |
+| 24 | 13 Dec | Idempotency races | Concurrent duplicate/conflicting-key scenario tests | Invariant assertions, evidence timeline |
+| 25 | 14 Dec | Lifecycle races | Capture/refund races and invariant validation | Amount/state invariants hold in tested cases |
+| 26 | 15 Dec | Evidence/report improvements | Failure classification, run summary and reproduction metadata | Reports explain assertion failures using facts |
+| 27 | 16 Dec | CLI | Minimal CLI to run/list/replay scenarios and export reports | CLI smoke tests; documented commands |
+| 28 | 17 Dec | Sample merchant target | Minimal synthetic sample integration/receiver for end-to-end demonstration | A scenario tests observable behavior of sample integration |
+| 29 | 18 Dec | Docker Compose and UX | One-command local stack, setup and troubleshooting | Fresh-start setup verified; no secrets baked in |
+| 30 | 19 Dec | Release/readiness | Full verification, security review, docs, demo scenarios and public-readiness decision | CI evidence, known limitations, release/no-release decision |
 
 ## LinkedIn project documentation (integrated into delivery)
 
@@ -117,5 +117,14 @@ The deterministic runner and test results remain authoritative.
 
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
-| 1 | Scheduled | — | Pending | Baseline/readiness gate |
-| 2–30 | Planned | — | — | Daily increments; blocked by failing CI |\n| LinkedIn posts | Planned | — | — | 8 evidence-grounded milestone drafts; publication remains user-controlled |
+| 1 | In progress (blocked on local execution access) | — | GitHub CI run #73 verified green; local full-suite/security review not run from this environment | Repository inspected; CI evidence confirmed; cannot run local commands without repository execution environment |
+| 2–30 | Planned | — | — | Daily increments; blocked by failing CI |\n| LinkedIn posts | Day 1 draft pending baseline completion | — | Draft must remain strictly factual | 8 evidence-grounded milestone drafts; publication remains user-controlled |
+
+
+## Day 1 baseline record (20 November 2026)
+
+- **Verified head:** `09e64e1c75f0b37809c86fbb9431bff929e9dbb7` (`docs: add LinkedIn milestone content plan`).
+- **CI:** GitHub Actions run [#73](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44699403332) completed successfully. Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit all reported success.
+- **Combined commit status API:** returned no individual status entries; the workflow run and its three jobs were inspected directly.
+- **Limit:** this environment can inspect GitHub and CI but does not provide an authorized repository checkout/terminal to run the local full test suite, inspect all source files in depth, or execute local security tooling. Day 1 is therefore not yet complete. This is a tooling blocker, not a claim that local tests passed.
+- **Next:** obtain an executable repository workspace, perform the full baseline review, and only then unblock Day 2.
