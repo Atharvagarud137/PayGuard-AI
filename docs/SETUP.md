@@ -1,6 +1,6 @@
 # PayGuard-AI setup guide
 
-**Status date: 15 November 2026.** This guide reflects the PostgreSQL-backed implementation and the current CI workflow.
+**Status date: 20 November 2026.** This guide reflects the PostgreSQL-backed implementation and the current CI workflow.
 
 ## Requirements
 
