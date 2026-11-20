@@ -1,5 +1,7 @@
 # API_SPEC.md — PayGuard AI Mock Payment Gateway
 
+**Reviewed: 20 November 2026.** This API contract is descriptive; runtime-generated OpenAPI in development/test is authoritative. Database migrations run under a dedicated migration role; API execution uses the restricted runtime role.
+
 ## Purpose
 
 This document defines the REST API exposed by the PayGuard AI Mock Payment Gateway.
