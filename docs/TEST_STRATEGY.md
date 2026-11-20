@@ -1,6 +1,6 @@
 # PayGuard-AI test strategy
 
-**Status date: 15 November 2026.**
+**Status date: 20 November 2026.**
 
 ## Testing objective
 
@@ -17,18 +17,22 @@ Validate payment lifecycle correctness, persistence, transaction atomicity, conc
 
 ## Latest verified CI evidence
 
-GitHub Actions [run #39](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/43557859045), for commit `c1be0651fd3503f12e06061755e39228f32950e0`, completed successfully on 14 November 2026.
+GitHub Actions [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973) for commit `a7016a85cc0b7e275d10ced0ae38cd444c9d46f0` completed successfully on 18 November 2026.
 
 | CI job | Result |
 |---|---|
-| Python unit and API | 142 passed, 1 warning |
+| Python unit and API | 143 passed, 1 warning |
 | Dashboard Playwright E2E | 6 passed, 2 warnings |
 | Python dependency audit | Passed; no known vulnerabilities reported |
 | JavaScript dependency audit | Passed; zero vulnerabilities reported |
 
-The CI run therefore executed 148 passing tests across the two test jobs. These figures refer to run #39; the documentation-only commit has a separate run.
+The CI run therefore executed 149 passing tests across the two test jobs. These figures refer to run #39; the documentation-only commit has a separate run.
 
 Warnings remain: Starlette's TestClient/httpx deprecation, a pytest fixture deprecation, Node dependency deprecations and GitHub Actions Node-runtime notices.
+
+## Runtime privilege-boundary tests
+
+The API test suite checks that the application role is not a table owner, cannot create schema objects, can perform the required card data operations and audit reads/inserts, and lacks audit UPDATE, DELETE, TRUNCATE and trigger-management privileges. Audit-maintenance and trigger tampering checks use the migration-owner connection rather than runtime credentials.
 
 ## PostgreSQL test requirements
 
@@ -39,7 +43,7 @@ The application and test fixtures require PostgreSQL. CI uses PostgreSQL 16.
 - Run `alembic upgrade head` before tests that exercise migration-installed triggers.
 - Never use a development or production database for tests.
 
-The root test fixture creates ORM tables and drops them at session teardown. Local test runs should use disposable databases. The CI Python and E2E jobs use separate PostgreSQL services.
+The test fixtures verify that Alembic migrations have already been applied; they do not create or drop tables. The runtime/test role has DML access only, while migrations and audit-maintenance tests use the migration-owner role. CI Python and E2E jobs use separate PostgreSQL services and role setups.
 
 ## Payment correctness and atomicity
 
