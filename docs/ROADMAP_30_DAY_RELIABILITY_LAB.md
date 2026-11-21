@@ -118,7 +118,7 @@ The deterministic runner and test results remain authoritative.
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
 | 1 | Complete | [`bd4aa96`](https://github.com/Atharvagarud137/PayGuard-AI/commit/bd4aa96bb67f955f4fc5735a9c162c7487e14c4e) | CI run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) for `fb18505` and run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) for `bd4aa96` passed all three jobs; 143 local unit/API tests, compileall, Alembic head/history and dashboard build are recorded as passing | Local E2E not run because port 8000 was occupied; CI E2E passed. Local dependency audits not run; CI audit passed. |
-| 2 | Complete (documentation-only) | Pending CI verification | Product scope and non-goals reconciled across README, PRD, architecture and test strategy; scenario-lab direction is explicit and AI deferred | No scenario-engine code was added in this scope; completion commit and CI evidence will be recorded after verification. |
+| 2 | Complete (documentation-only) | [`6591b995`](https://github.com/Atharvagarud137/PayGuard-AI/commit/6591b9953c559d8426be05d72a339eaf0ece6e78) | GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) passed all three jobs | Scope reconciliation, README status and Day 1 LinkedIn draft; no scenario-engine code or tests added. |
 | 3–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
 | LinkedIn posts | Day 1 draft prepared (not published); 7 remaining | — | Draft status remains user-controlled | 8 evidence-grounded milestone drafts; publication remains user-controlled |
 
@@ -161,5 +161,5 @@ The 30-day plan now focuses on scenario definitions, deterministic assertions, e
 - **Verified documentation agreement:** README, PRD, architecture and test strategy describe the same product direction: an incremental scenario-testing lab inside the existing modular monolith, not a rewrite or real payment processor.
 - **Scope boundaries:** synthetic data only; no real PAN/CVV, production payment processing or PCI claims; scenario engine, assertions, evidence/replay, failure injection, webhook and concurrency capabilities remain planned until implemented; AI remains deferred.
 - **Changes in this increment:** reconciled status wording, recorded Day 2 verification, and prepared the Day 1 milestone draft. No scenario-engine code or tests were added.
-- **CI:** pending for the Day 2 status commit; record the actual result and SHA after verification.
+- **CI:** GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) completed successfully for commit `6591b995`; Python/API, dashboard E2E and dependency-audit jobs all passed.
 - **Limitations:** this scheduled environment has GitHub API access but no executable repository checkout/terminal, so it did not rerun local tests or local security tools.

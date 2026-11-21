@@ -8,7 +8,7 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 ## Current status (21 November 2026)
 
-The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseline gate is complete, and Day 2's product-scope documentation has been reconciled across the README, PRD, architecture and test strategy. GitHub Actions run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) passed all three jobs for baseline-completion commit `bd4aa96`. The Day 2 documentation status commit is being verified separately.
+The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseline gate is complete, and Day 2's documentation-only scope gate is complete. The Day 2 status commit `6591b995` records the scope reconciliation and Day 1 milestone draft. GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) passed all three jobs for that commit. Day 1 local evidence is recorded in the roadmap; this scheduled environment did not rerun local tests or security tools.
 
 | Area | Current state |
 |---|---|
