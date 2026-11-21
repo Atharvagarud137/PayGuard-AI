@@ -117,9 +117,10 @@ The deterministic runner and test results remain authoritative.
 
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
-| 1 | Complete | [`fb18505`](https://github.com/Atharvagarud137/PayGuard-AI/commit/fb18505f30e72cbb3016b5fecff7267d53a42416) | GitHub CI run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) passed all three jobs; 143 local unit/API tests passed; compileall, Alembic head/history, and dashboard build passed | Local E2E not run because another project owns fixed port 8000; E2E passed in CI. Previous pytest log's 149 errors were database setup errors and did not execute assertions. |
-| 2–30 | Planned | — | — | Day 2 is unblocked; continue one daily increment at a time. |
-| LinkedIn posts | Day 1 draft pending baseline completion | — | Draft must remain strictly factual | 8 evidence-grounded milestone drafts; publication remains user-controlled |
+| 1 | Complete | [`bd4aa96`](https://github.com/Atharvagarud137/PayGuard-AI/commit/bd4aa96bb67f955f4fc5735a9c162c7487e14c4e) | CI run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) for `fb18505` and run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) for `bd4aa96` passed all three jobs; 143 local unit/API tests, compileall, Alembic head/history and dashboard build are recorded as passing | Local E2E not run because port 8000 was occupied; CI E2E passed. Local dependency audits not run; CI audit passed. |
+| 2 | Complete (documentation-only) | Pending CI verification | Product scope and non-goals reconciled across README, PRD, architecture and test strategy; scenario-lab direction is explicit and AI deferred | No scenario-engine code was added in this scope; completion commit and CI evidence will be recorded after verification. |
+| 3–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
+| LinkedIn posts | Day 1 draft prepared (not published); 7 remaining | — | Draft status remains user-controlled | 8 evidence-grounded milestone drafts; publication remains user-controlled |
 
 
 ## Day 1 baseline record (20 November 2026)
@@ -131,4 +132,34 @@ The deterministic runner and test results remain authoritative.
 - **E2E limitation:** local E2E was not run because the suite hardcodes backend port 8000, already used by another running project. Those containers were left untouched. The dashboard E2E job passed in CI run #76.
 - **Security/readiness evidence:** CI dependency audits and the tests for runtime DB privileges/security completed successfully. The CI workflow and test setup were reviewed; both test suites depend on a migrated PostgreSQL database.
 - **Cleanup:** the disposable `payguard-day1-postgres-20261120` container was stopped and removed. It had no mounted volumes; other Docker containers were left running.
-- **Next:** proceed to Day 2. The old `pytest-results.txt` remains as an untracked local artifact and was not modified.
+- **Next:** Day 1 baseline gate closed. Day 2 documentation scope is reconciled; see the Day 2 record below. The old `pytest-results.txt` remains as an untracked local artifact and was not modified.
+
+
+## Day 1 LinkedIn draft (draft; not published)
+
+**Post copy:**
+
+PayGuard-AI is shifting from a mock payment gateway toward a Payment Integration Reliability Lab. Before adding more features, I wanted a baseline I could point to instead of relying on optimism, which is not a test strategy.
+
+The recorded local baseline includes 143 Python unit/API tests passing in 5.04 seconds against a disposable PostgreSQL 16 setup, plus Python compilation, Alembic head/history checks and a dashboard production build. GitHub Actions run #76 passed the Python/API, browser E2E and dependency-audit jobs. Run #77 also passed all three jobs for the baseline-completion documentation commit.
+
+I did not run browser E2E locally because another project occupied the backend's fixed port 8000. The CI E2E job passed. That limitation stays in the record rather than being quietly converted into a claim that everything ran locally.
+
+The 30-day plan now focuses on scenario definitions, deterministic assertions, evidence and replay, controlled failure injection, webhook reliability and concurrency. AI is deliberately deferred until the deterministic evidence foundation is built.
+
+**Takeaway:** baseline evidence and explicit limitations come before feature velocity.
+
+**Sanitized visual suggestion:** a simple three-job CI status screenshot beside a diagram labelled *planned* showing Scenario → Runner → Assertions/Evidence → Report/Replay. Exclude secrets, tokens and transaction data.
+
+**Hashtags:** #QA #TestAutomation #Payments #ReliabilityEngineering #SoftwareTesting #Python #PostgreSQL
+
+**Status:** Draft prepared for review; not published or externally scheduled.
+
+## Day 2 documentation record (21 November 2026)
+
+- **Scope:** product language, goals, non-goals and reliability-lab direction.
+- **Verified documentation agreement:** README, PRD, architecture and test strategy describe the same product direction: an incremental scenario-testing lab inside the existing modular monolith, not a rewrite or real payment processor.
+- **Scope boundaries:** synthetic data only; no real PAN/CVV, production payment processing or PCI claims; scenario engine, assertions, evidence/replay, failure injection, webhook and concurrency capabilities remain planned until implemented; AI remains deferred.
+- **Changes in this increment:** reconciled status wording, recorded Day 2 verification, and prepared the Day 1 milestone draft. No scenario-engine code or tests were added.
+- **CI:** pending for the Day 2 status commit; record the actual result and SHA after verification.
+- **Limitations:** this scheduled environment has GitHub API access but no executable repository checkout/terminal, so it did not rerun local tests or local security tools.

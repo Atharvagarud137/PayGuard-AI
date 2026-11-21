@@ -6,9 +6,9 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 > **Data boundary:** use synthetic test data only. Do not submit or store real PANs, CVVs/CVCs, cardholder data, payment credentials, or production transaction data.
 
-## Current status (20 November 2026)
+## Current status (21 November 2026)
 
-The 30-day Payment Integration Reliability Lab roadmap is active. The Day 1 baseline review is complete. GitHub Actions [run #76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) passed the Python Unit and API Tests, Dashboard End-to-End Tests, and Dependency Security Audit jobs for commit `fb18505`.
+The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseline gate is complete, and Day 2's product-scope documentation has been reconciled across the README, PRD, architecture and test strategy. GitHub Actions run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) passed all three jobs for baseline-completion commit `bd4aa96`. The Day 2 documentation status commit is being verified separately.
 
 | Area | Current state |
 |---|---|
@@ -192,6 +192,12 @@ The 30-day roadmap includes eight LinkedIn milestone-post drafts aligned to veri
 **Daily execution rule:** each day's work is committed directly to main only after inspecting the latest commit and CI. A failing CI run blocks the next planned day's task. README status, evidence and known limitations are updated on significant milestones. No PRs or history rewriting.
 
 
-## Day 1 status (20 November 2026)
+## Day 1 baseline status (20 November 2026)
 
-The roadmap Day 1 has started early. GitHub Actions run [#73](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44699403332) passed all three jobs for commit `09e64e1`. A deeper local source review, local test execution and security-tool run remain pending because the current execution environment provides GitHub inspection but no authorized repository checkout/terminal. Day 1 is not marked complete, and implementation Day 2 remains gated on resolving that access limitation.
+Day 1 is complete in the repository's recorded baseline. Commit `fb18505` records the local verification results: 143 Python unit/API tests passed in 5.04 seconds against a disposable PostgreSQL 16 database with migration/runtime roles separated; `compileall`, Alembic head/history and the dashboard production build also passed. GitHub Actions run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) passed all three jobs for `fb18505`, and run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) passed all three jobs for completion commit `bd4aa96`.
+
+Local browser E2E was not run because another project occupied backend port 8000; the CI E2E job passed. Local dependency-audit commands were not run in the recorded baseline, but the CI security-audit job passed. This scheduled run confirmed the repository record and CI; it did not rerun local tests or security tools because it still lacks an executable checkout/terminal.
+
+## Day 2 documentation status (21 November 2026)
+
+The product-scope gate is complete as a documentation-only increment. README, PRD, architecture and test strategy consistently describe PayGuard-AI as a **planned Payment Integration Reliability Lab** built on the existing modular monolith. Scenario definitions, deterministic assertions, evidence/replay, controlled failure injection, webhooks and concurrency are planned; no new scenario-engine implementation is claimed. Synthetic-data-only boundaries remain explicit, and AI is deferred until the deterministic evidence foundation exists. The Day 1 build-in-public post draft is included in the roadmap for review and has not been published.
