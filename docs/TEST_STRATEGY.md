@@ -1,6 +1,6 @@
 # PayGuard-AI test strategy
 
-**Status date: 20 November 2026.**
+**Status date: 22 November 2026.**
 
 ## Testing objective
 
@@ -119,6 +119,12 @@ See [SETUP.md](SETUP.md) for database environment variables and the E2E reset-to
 
 No PCI DSS compliance or production payment capability is claimed.
 
+
+## Day 3 scenario schema validation
+
+`tests/unit/test_scenario_models.py` adds 20 schema tests for scenario/step/assertion/run/result types, ordered dependencies, reference integrity, status lifecycle timestamps, scalar-only inert parameters, assertion expected/observed values and successful-run completeness.
+
+**Local isolated evidence:** 20 passed in a temporary workspace using Pydantic 2.13.5, pytest 9.0.3 and a minimal `TransactionStatus` stub. This was not a full-repository test run. The commit's GitHub Actions validation is pending. The runner, persistence, action-specific parameter contracts and report generation are not implemented.
 
 ## Target reliability-scenario testing strategy (planned)
 

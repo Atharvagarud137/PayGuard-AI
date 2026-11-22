@@ -118,8 +118,9 @@ The deterministic runner and test results remain authoritative.
 | Day | Status | Commit | CI/evidence | Notes |
 |---|---|---|---|---|
 | 1 | Complete | [`bd4aa96`](https://github.com/Atharvagarud137/PayGuard-AI/commit/bd4aa96bb67f955f4fc5735a9c162c7487e14c4e) | CI run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) for `fb18505` and run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) for `bd4aa96` passed all three jobs; 143 local unit/API tests, compileall, Alembic head/history and dashboard build are recorded as passing | Local E2E not run because port 8000 was occupied; CI E2E passed. Local dependency audits not run; CI audit passed. |
-| 2 | Complete (documentation-only) | [`6591b995`](https://github.com/Atharvagarud137/PayGuard-AI/commit/6591b9953c559d8426be05d72a339eaf0ece6e78) | GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) passed all three jobs | Scope reconciliation, README status and Day 1 LinkedIn draft; no scenario-engine code or tests added. |
-| 3–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
+| 2 | Complete (documentation-only) | [`6591b995`](https://github.com/Atharvagarud137/PayGuard-AI/commit/6591b9953c559d8426be05d72a339eaf0ece6e78); evidence commit [`3c999c2`](https://github.com/Atharvagarud137/PayGuard-AI/commit/3c999c2ac7a2cbf28bb55b9df658a243ff1e7fc7) | Runs [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) and [#79](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861550394) passed all three jobs | Scope reconciliation, README status and Day 1 LinkedIn draft; no scenario-engine code or tests added. |
+| 3 | In progress (CI pending) | — | Isolated schema suite: 20 passed in temporary workspace; full-repository CI pending | Typed scenario/step/assertion/run/result models and validation tests added; schema-only increment, no execution or persistence. |
+| 4–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
 | LinkedIn posts | Day 1 draft prepared (not published); 7 remaining | — | Draft status remains user-controlled | 8 evidence-grounded milestone drafts; publication remains user-controlled |
 
 
@@ -161,5 +162,15 @@ The 30-day plan now focuses on scenario definitions, deterministic assertions, e
 - **Verified documentation agreement:** README, PRD, architecture and test strategy describe the same product direction: an incremental scenario-testing lab inside the existing modular monolith, not a rewrite or real payment processor.
 - **Scope boundaries:** synthetic data only; no real PAN/CVV, production payment processing or PCI claims; scenario engine, assertions, evidence/replay, failure injection, webhook and concurrency capabilities remain planned until implemented; AI remains deferred.
 - **Changes in this increment:** reconciled status wording, recorded Day 2 verification, and prepared the Day 1 milestone draft. No scenario-engine code or tests were added.
-- **CI:** GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) completed successfully for commit `6591b995`; Python/API, dashboard E2E and dependency-audit jobs all passed.
+- **CI:** GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) completed successfully for commit `6591b995`; Python/API, dashboard E2E and dependency-audit jobs all passed. Evidence-record commit `3c999c2` was also validated by run [#79](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861550394), all three jobs passed.
 - **Limitations:** this scheduled environment has GitHub API access but no executable repository checkout/terminal, so it did not rerun local tests or local security tools.
+
+
+## Day 3 schema increment (22 November 2026)
+
+- **Scope:** typed declarative scenario definitions, steps, assertions, run lifecycle and result schemas; validation tests and schema boundary documentation.
+- **Implemented:** enums for declared action/assertion kinds and run/step/assertion status; unique identifier/reference checks; dependencies restricted to earlier steps; timezone-aware lifecycle timestamps; scalar-only parameters/outputs; expected-value validation; result consistency and successful-run completeness.
+- **Local evidence:** 20 schema tests passed in an isolated temporary workspace with Pydantic 2.13.5, pytest 9.0.3 and a minimal `TransactionStatus` stub. This is not a full-repository test run.
+- **CI:** pending for the implementation commit.
+- **Not implemented:** scenario storage, migrations, runner, action-specific parameter contracts, failure-injection execution, evidence persistence and report export. Day 4 storage design remains next after CI verification.
+- **Safety:** synthetic data only; no arbitrary code execution, payment processing or PCI claims.

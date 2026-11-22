@@ -6,9 +6,9 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 > **Data boundary:** use synthetic test data only. Do not submit or store real PANs, CVVs/CVCs, cardholder data, payment credentials, or production transaction data.
 
-## Current status (21 November 2026)
+## Current status (22 November 2026)
 
-The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseline gate is complete, and Day 2's documentation-only scope gate is complete. The Day 2 status commit `6591b995` records the scope reconciliation and Day 1 milestone draft. GitHub Actions run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) passed all three jobs for that commit. Day 1 local evidence is recorded in the roadmap; this scheduled environment did not rerun local tests or security tools.
+The 30-day Payment Integration Reliability Lab roadmap is active. Days 1 and 2 are complete, and Day 3's typed scenario schema and validation tests have been added; full-repository CI validation is pending. Day 2's scope reconciliation commit `6591b995` was validated by run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842); the CI evidence-record commit `3c999c2` was validated by run [#79](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861550394), all three jobs passed. Day 1 local evidence is recorded in the roadmap; this scheduled environment did not rerun the full repository suite or local security tools.
 
 | Area | Current state |
 |---|---|
@@ -19,6 +19,7 @@ The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseli
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
+| Scenario domain model | Typed declarative schemas and validation tests added; CI pending. Runner and persistence are not implemented. |
 | API/unit | 143 passed locally; CI passed in run #76 |
 | Browser E2E | Passed in CI run #76; not run locally because another project occupies the fixed backend port 8000 |
 | Dependency audits | Passed in run #76 |
@@ -28,6 +29,10 @@ The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseli
 | PCI DSS | No assessment or compliance claim |
 
 These results apply to the reviewed commit; they do not guarantee future runs. Local Python syntax compilation, Alembic head/history checks, the dashboard production build, and all 143 Python unit/API tests completed successfully. The prior `pytest-results.txt` run recorded 149 setup errors because no database URL was configured; those errors preceded test assertions and were resolved by using an isolated disposable PostgreSQL container. Local browser E2E was skipped because port 8000 is used by another project; its CI job passed. See [the roadmap baseline record](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md) for details.
+
+## Scenario domain model
+
+The Day 3 schema increment defines scenario, step, assertion, run and result models with status enums, ordered dependencies, reference checks and lifecycle validation. Parameters and outputs are limited to inert scalar values; no runner or persistence is included. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md). The schema suite has 20 tests; an isolated temporary workspace passed, but full-repository CI is pending.
 
 ## Payment lifecycle
 
@@ -110,6 +115,7 @@ These are code-level controls, not a complete identity platform. There is no per
 |---|---|
 | [Product requirements](docs/PRD.md) | Product scope, non-goals and requirements |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, transactions, locks, idempotency and audit |
+| [Scenario domain model](docs/SCENARIO_DOMAIN_MODEL.md) | Day 3 typed schema boundaries and validation rules; execution/persistence remain future work. |
 | [API specification](docs/API_SPEC.md) | Routes, headers, request behavior and responses |
 | [Test strategy](docs/TEST_STRATEGY.md) | PostgreSQL integration, concurrency, security and E2E tests |
 | [Technology stack](docs/TECH_STACK.md) | Runtime and development tools |
