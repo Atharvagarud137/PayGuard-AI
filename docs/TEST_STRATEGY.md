@@ -17,18 +17,16 @@ Validate payment lifecycle correctness, persistence, transaction atomicity, conc
 
 ## Latest verified CI evidence
 
-GitHub Actions [run #44243773973](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44243773973) for commit `a7016a85cc0b7e275d10ced0ae38cd444c9d46f0` completed successfully on 18 November 2026.
+GitHub Actions [run #80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) for commit `dd30878` completed successfully on 22 November 2026.
 
 | CI job | Result |
 |---|---|
-| Python unit and API | 143 passed, 1 warning |
+| Python unit and API | 163 passed, 1 warning |
 | Dashboard Playwright E2E | 6 passed, 2 warnings |
-| Python dependency audit | Passed; no known vulnerabilities reported |
-| JavaScript dependency audit | Passed; zero vulnerabilities reported |
+| Python dependency audit | Passed |
+| JavaScript dependency audit | Passed |
 
-The CI run therefore executed 149 passing tests across the two test jobs. These figures refer to run #39; the documentation-only commit has a separate run.
-
-Warnings remain: Starlette's TestClient/httpx deprecation, a pytest fixture deprecation, Node dependency deprecations and GitHub Actions Node-runtime notices.
+The run completed all three CI jobs. Warnings remain: Starlette's TestClient/httpx deprecation, pytest fixture deprecation, Node dependency deprecations and GitHub Actions Node-runtime notices.
 
 ## Runtime privilege-boundary tests
 
@@ -124,7 +122,7 @@ No PCI DSS compliance or production payment capability is claimed.
 
 `tests/unit/test_scenario_models.py` adds 20 schema tests for scenario/step/assertion/run/result types, ordered dependencies, reference integrity, status lifecycle timestamps, scalar-only inert parameters, assertion expected/observed values and successful-run completeness.
 
-**Local isolated evidence:** 20 passed in a temporary workspace using Pydantic 2.13.5, pytest 9.0.3 and a minimal `TransactionStatus` stub. This was not a full-repository test run. The commit's GitHub Actions validation is pending. The runner, persistence, action-specific parameter contracts and report generation are not implemented.
+**Local isolated evidence:** 20 passed in a temporary workspace using Pydantic 2.13.5, pytest 9.0.3 and a minimal `TransactionStatus` stub. This was not a full-repository test run. GitHub Actions run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) then validated the repository commit: 163 Python/unit/API tests passed (1 warning), 6 browser E2E tests passed (2 warnings), and dependency audits passed. The runner, persistence, action-specific parameter contracts and report generation are not implemented.
 
 ## Target reliability-scenario testing strategy (planned)
 

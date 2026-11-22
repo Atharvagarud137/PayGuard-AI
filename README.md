@@ -8,7 +8,7 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 ## Current status (22 November 2026)
 
-The 30-day Payment Integration Reliability Lab roadmap is active. Days 1 and 2 are complete, and Day 3's typed scenario schema and validation tests have been added; full-repository CI validation is pending. Day 2's scope reconciliation commit `6591b995` was validated by run [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842); the CI evidence-record commit `3c999c2` was validated by run [#79](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861550394), all three jobs passed. Day 1 local evidence is recorded in the roadmap; this scheduled environment did not rerun the full repository suite or local security tools.
+The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseline gate, Day 2's documentation scope and Day 3's typed schema increment are complete. Scenario schema commit `dd30878` passed all three GitHub Actions jobs in run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809): 163 Python/unit/API tests passed (1 warning), 6 dashboard E2E tests passed (2 warnings), and dependency audits passed. Day 1 and Day 2 evidence remains recorded in the roadmap. This scheduled environment did not run a full local repository suite or local security tools.
 
 | Area | Current state |
 |---|---|
@@ -19,10 +19,10 @@ The 30-day Payment Integration Reliability Lab roadmap is active. Days 1 and 2 a
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| Scenario domain model | Typed declarative schemas and validation tests added; CI pending. Runner and persistence are not implemented. |
-| API/unit | 143 passed locally; CI passed in run #76 |
-| Browser E2E | Passed in CI run #76; not run locally because another project occupies the fixed backend port 8000 |
-| Dependency audits | Passed in run #76 |
+| Scenario domain model | Typed declarative schemas and validation tests implemented; run #80 passed. Runner and persistence are not implemented. |
+| API/unit | 143 passed locally at baseline; 163 passed in CI run #80 (1 warning) |
+| Browser E2E | 6 passed in CI run #80 (2 warnings); local E2E remains unrun |
+| Dependency audits | Passed in run #80 |
 | AI RCA / test generation | Planned, not implemented |
 | OpenTelemetry / metrics | Not implemented |
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
@@ -32,7 +32,7 @@ These results apply to the reviewed commit; they do not guarantee future runs. L
 
 ## Scenario domain model
 
-The Day 3 schema increment defines scenario, step, assertion, run and result models with status enums, ordered dependencies, reference checks and lifecycle validation. Parameters and outputs are limited to inert scalar values; no runner or persistence is included. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md). The schema suite has 20 tests; an isolated temporary workspace passed, but full-repository CI is pending.
+The Day 3 schema increment defines scenario, step, assertion, run and result models with status enums, ordered dependencies, reference checks and lifecycle validation. Parameters and outputs are limited to inert scalar values; no runner or persistence is included. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md). The schema suite has 20 tests; all were included in the 163-test Python/API CI suite in run #80. A separate isolated run also passed 20 tests using a minimal `TransactionStatus` stub, but it was not full-repository verification.
 
 ## Payment lifecycle
 

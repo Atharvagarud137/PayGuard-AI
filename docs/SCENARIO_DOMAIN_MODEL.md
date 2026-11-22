@@ -1,6 +1,6 @@
 # PayGuard-AI scenario domain model
 
-**Status date: 22 November 2026 (Day 3).** The typed schema layer and validation tests are implemented in this increment. CI validation is pending. A temporary isolated workspace using a minimal `TransactionStatus` stub ran the schema suite: 20 passed. This is not full-repository verification. Scenario persistence and execution are not implemented.
+**Status date: 22 November 2026 (Day 3).** The typed schema layer and validation tests are implemented in this increment. GitHub Actions run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) passed all three jobs: 163 Python/unit/API tests (1 warning), 6 E2E tests (2 warnings) and dependency audits. The separate temporary isolated schema run also passed 20 tests using a minimal `TransactionStatus` stub, but it was not full-repository verification. Scenario persistence and execution are not implemented.
 
 ## Boundary
 
