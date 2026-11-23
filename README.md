@@ -211,6 +211,6 @@ The product-scope gate is complete as a documentation-only increment. README, PR
 
 ## Day 4 scenario storage design (23 November 2026)
 
-Day 4 is complete as a design-only increment. The accepted storage decision is documented in [ADR-001: Scenario storage and run evidence](docs/ADR-001-scenario-storage.md). The design uses the existing PostgreSQL database, versioned immutable scenario definitions, run records with frozen definition snapshots, and phased step/assertion/event evidence tables. It preserves the Alembic migration-owner/runtime-role split and explicitly addresses transaction boundaries for ambiguous post-commit outcomes.
+The Day 4 storage design is committed, but CI verification is still pending; Day 4 remains in progress until the gate passes. The accepted storage decision is documented in [ADR-001: Scenario storage and run evidence](docs/ADR-001-scenario-storage.md). The design uses the existing PostgreSQL database, versioned immutable scenario definitions, run records with frozen definition snapshots, and phased step/assertion/event evidence tables. It preserves the Alembic migration-owner/runtime-role split and explicitly addresses transaction boundaries for ambiguous post-commit outcomes.
 
 No persistence code, ORM tables or migration were added on Day 4. This environment had GitHub repository access but no executable repository checkout/terminal, so no local tests, migration execution or local security tools were run. The next increment is Day 5 persistence, limited to the scheduled definition/run storage scope and verified by CI.
