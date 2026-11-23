@@ -211,6 +211,14 @@ The product-scope gate is complete as a documentation-only increment. README, PR
 
 ## Day 4 scenario storage design (23 November 2026)
 
-The Day 4 storage design is committed, but CI verification is still pending; Day 4 remains in progress until the gate passes. The accepted storage decision is documented in [ADR-001: Scenario storage and run evidence](docs/ADR-001-scenario-storage.md). The design uses the existing PostgreSQL database, versioned immutable scenario definitions, run records with frozen definition snapshots, and phased step/assertion/event evidence tables. It preserves the Alembic migration-owner/runtime-role split and explicitly addresses transaction boundaries for ambiguous post-commit outcomes.
+Day 4 is complete as a design-only increment. Commit `b3bc41ca` was verified by GitHub Actions run [#83](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45107175082), which passed all three jobs. The accepted storage decision is documented in [ADR-001: Scenario storage and run evidence](docs/ADR-001-scenario-storage.md). The design uses the existing PostgreSQL database, versioned immutable scenario definitions, run records with frozen definition snapshots, and phased step/assertion/event evidence tables. It preserves the Alembic migration-owner/runtime-role split and explicitly addresses transaction boundaries for ambiguous post-commit outcomes.
 
 No persistence code, ORM tables or migration were added on Day 4. This environment had GitHub repository access but no executable repository checkout/terminal, so no local tests, migration execution or local security tools were run. The next increment is Day 5 persistence, limited to the scheduled definition/run storage scope and verified by CI.
+
+
+### Day 4 verification evidence
+
+- **Design/evidence commit:** [`b3bc41ca`](https://github.com/Atharvagarud137/PayGuard-AI/commit/b3bc41caf47b48277bebf894db937e2ea8325590).
+- **CI:** run [#83](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45107175082) passed Python unit/API, dashboard E2E and dependency-security jobs.
+- **Superseded run:** #82 was cancelled when the follow-up status correction commit was pushed; run #83 verified the current Day 4 commit.
+- **Limitations:** documentation-only work. No local test execution, migration execution or local security-tool run was possible in this environment. No scenario persistence code or migration was added.
