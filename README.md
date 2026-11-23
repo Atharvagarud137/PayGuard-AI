@@ -184,7 +184,7 @@ The planned core capabilities are scenario execution, controlled ambiguous outco
 
 ### LinkedIn build-in-public plan
 
-The 30-day roadmap includes eight LinkedIn milestone-post drafts aligned to verified project progress (target milestones: Days 1, 7, 10, 16, 22, 26, 29 and 30). Posts will share concrete engineering decisions, test evidence, lessons and demo material, while clearly distinguishing planned from implemented work. Drafts are prepared for review; nothing is published or externally scheduled without explicit authorization.
+Milestone evidence is tracked at Days 1, 7, 10, 16, 22, 26, 29 and 30. The user has decided to prepare and publish the LinkedIn series only after the full 30-day plan is complete. No new LinkedIn drafts, publishing or scheduling work will be done during the roadmap. The existing Day 1 draft is retained as historical, unpublished content and will not be expanded during the plan.
 
 ### Roadmap and daily updates
 
@@ -206,4 +206,11 @@ Local browser E2E was not run because another project occupied backend port 8000
 
 ## Day 2 documentation status (21 November 2026)
 
-The product-scope gate is complete as a documentation-only increment. README, PRD, architecture and test strategy consistently describe PayGuard-AI as a **planned Payment Integration Reliability Lab** built on the existing modular monolith. Scenario definitions, deterministic assertions, evidence/replay, controlled failure injection, webhooks and concurrency are planned; no new scenario-engine implementation is claimed. Synthetic-data-only boundaries remain explicit, and AI is deferred until the deterministic evidence foundation exists. The Day 1 build-in-public post draft is included in the roadmap for review and has not been published.
+The product-scope gate is complete as a documentation-only increment. README, PRD, architecture and test strategy consistently describe PayGuard-AI as a **planned Payment Integration Reliability Lab** built on the existing modular monolith. Scenario definitions, deterministic assertions, evidence/replay, controlled failure injection, webhooks and concurrency are planned; no new scenario-engine implementation is claimed. Synthetic-data-only boundaries remain explicit, and AI is deferred until the deterministic evidence foundation exists. The Day 1 post draft is retained as historical, unpublished content. Further LinkedIn drafting is deferred until the entire 30-day roadmap is complete.
+
+
+## Day 4 scenario storage design (23 November 2026)
+
+Day 4 is complete as a design-only increment. The accepted storage decision is documented in [ADR-001: Scenario storage and run evidence](docs/ADR-001-scenario-storage.md). The design uses the existing PostgreSQL database, versioned immutable scenario definitions, run records with frozen definition snapshots, and phased step/assertion/event evidence tables. It preserves the Alembic migration-owner/runtime-role split and explicitly addresses transaction boundaries for ambiguous post-commit outcomes.
+
+No persistence code, ORM tables or migration were added on Day 4. This environment had GitHub repository access but no executable repository checkout/terminal, so no local tests, migration execution or local security tools were run. The next increment is Day 5 persistence, limited to the scheduled definition/run storage scope and verified by CI.

@@ -151,3 +151,8 @@ Every scenario report should identify scenario/version, execution ID, inputs/par
 
 ### CI policy
 Each daily increment adds relevant regression coverage and runs existing CI. Failures block the next roadmap task. Never infer results from a commit or claim tests pass without run evidence.
+
+
+## Day 4 storage design and planned persistence tests
+
+[ADR-001: Scenario definition and run evidence storage](ADR-001-scenario-storage.md) is the accepted design for the upcoming persistence increment. The initial Day 5 tests must cover versioned definition insert/read, canonical digest and snapshot consistency, run creation tied to an exact definition version, uniqueness and positive-version constraints, timestamp/status checks, restrictive references, and runtime/migrator role separation. Subsequent runner/assertion/evidence increments add lifecycle-transition, step/assertion result and append-only event tests. The ADR is a design record, not evidence that persistence tests or migrations have run.

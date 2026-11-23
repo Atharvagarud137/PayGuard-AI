@@ -62,16 +62,9 @@ Run reproducible payment failure scenarios—including ambiguous outcomes, retry
 | 29 | 18 Dec | Docker Compose and UX | One-command local stack, setup and troubleshooting | Fresh-start setup verified; no secrets baked in |
 | 30 | 19 Dec | Release/readiness | Full verification, security review, docs, demo scenarios and public-readiness decision | CI evidence, known limitations, release/no-release decision |
 
-## LinkedIn project documentation (integrated into delivery)
+## LinkedIn milestone tracking (deferred until plan completion)
 
-Build a truthful public engineering narrative alongside implementation. This is a documentation/content deliverable, not a substitute for engineering work.
-
-- Prepare **8 milestone post drafts**, tentatively aligned to Days 1, 7, 10, 16, 22, 26, 29 and 30 (adjust dates if milestones move).
-- Draft each post only after verifying the actual work, commit, tests and CI evidence. Clearly distinguish implemented functionality from planned work; do not inflate results, expose secrets, include sensitive details, or claim PCI/compliance/real processing.
-- Use a consistent story arc: project pivot and problem statement; scenario engine; first reproducible ambiguous-outcome slice; fault-injection/recovery learning; webhook reliability; concurrency and invariants; runnable demo; final retrospective and evidence.
-- Include concise post copy, a useful technical takeaway, relevant sanitized screenshots/diagram suggestions where available, and restrained hashtags. Avoid generic motivational filler and engagement bait.
-- **Draft and deliver posts for the user's review; do not publish to LinkedIn or schedule them externally without explicit authorization.**
-- Maintain the draft/post status in the roadmap (drafted, reviewed, published by user) without inventing publication status.
+Track verified engineering facts at milestone days 1, 7, 10, 16, 22, 26, 29 and 30 for the final build-in-public series. The user has decided to prepare and post the LinkedIn series only after the full 30-day plan is complete. During the roadmap, record engineering evidence only: do not prepare, expand, publish or schedule post drafts. The existing Day 1 draft remains historical, unpublished content. After Day 30, prepare the series from verified commits, tests, CI results, lessons and sanitized visual suggestions for the user's review. Never publish or schedule without explicit authorization.
 
 ## Phase gates
 
@@ -120,8 +113,9 @@ The deterministic runner and test results remain authoritative.
 | 1 | Complete | [`bd4aa96`](https://github.com/Atharvagarud137/PayGuard-AI/commit/bd4aa96bb67f955f4fc5735a9c162c7487e14c4e) | CI run [#76](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44740263945) for `fb18505` and run [#77](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44741250041) for `bd4aa96` passed all three jobs; 143 local unit/API tests, compileall, Alembic head/history and dashboard build are recorded as passing | Local E2E not run because port 8000 was occupied; CI E2E passed. Local dependency audits not run; CI audit passed. |
 | 2 | Complete (documentation-only) | [`6591b995`](https://github.com/Atharvagarud137/PayGuard-AI/commit/6591b9953c559d8426be05d72a339eaf0ece6e78); evidence commit [`3c999c2`](https://github.com/Atharvagarud137/PayGuard-AI/commit/3c999c2ac7a2cbf28bb55b9df658a243ff1e7fc7) | Runs [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) and [#79](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861550394) passed all three jobs | Scope reconciliation, README status and Day 1 LinkedIn draft; no scenario-engine code or tests added. |
 | 3 | Complete | [`dd30878`](https://github.com/Atharvagarud137/PayGuard-AI/commit/dd30878bb99ed4f773020e63967ecd6a3592e6be) | CI run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) passed all three jobs: 163 Python/API tests (1 warning), 6 E2E tests (2 warnings), dependency audits passed | Typed scenario/step/assertion/run/result models and 20 schema tests; CI verified. Runner/persistence not implemented. |
-| 4–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
-| LinkedIn posts | Day 1 draft prepared (not published); 7 remaining | — | Draft status remains user-controlled | 8 evidence-grounded milestone drafts; publication remains user-controlled |
+| 4 | Complete (design-only) | ADR and evidence commits recorded below | CI run #82 for design commit and run #83 for evidence commit (both three jobs passed) | Storage design accepted; no schema/migration or local tests executed in this environment. Day 5 persistence remains next. |
+| 5–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
+| LinkedIn series | Deferred until Day 30 completion | — | Engineering evidence only during roadmap | Milestones tracked on Days 1, 7, 10, 16, 22, 26, 29, 30; no new drafts or publishing during the plan. Existing Day 1 draft remains historical and unpublished. |
 
 
 ## Day 1 baseline record (20 November 2026)
@@ -176,3 +170,14 @@ The 30-day plan now focuses on scenario definitions, deterministic assertions, e
 - **Limitations:** no full local repository execution or local security audit was possible in this scheduled environment; the isolated schema run used a minimal `TransactionStatus` stub. CI executed the actual repository tests. The runner and persistence remain out of scope.
 - **Not implemented:** scenario storage, migrations, runner, action-specific parameter contracts, failure-injection execution, evidence persistence and report export. Day 4 storage design remains next after CI verification.
 - **Safety:** synthetic data only; no arbitrary code execution, payment processing or PCI claims.
+
+
+## Day 4 scenario storage design (23 November 2026)
+
+- **Scope:** storage design and ADR only.
+- **Decision:** use the existing PostgreSQL database; immutable logical scenario versions; canonical payload digest; run records referencing an exact version and storing a frozen snapshot; relational fields for IDs/status/timestamps and JSONB for bounded validated payloads; phased step/assertion/event tables; explicit transaction boundaries and restrictive evidence retention.
+- **ADR:** [ADR-001](ADR-001-scenario-storage.md).
+- **Migration/role boundary:** the next migration follows `005_audit_reference_without_fk`; DDL remains migration-owner-only. The runtime role must remain DML-limited and must not gain schema ownership or CREATE privileges. Existing audit privileges/guards are unchanged.
+- **Implementation boundary:** Day 5 starts with scenario-definition and run persistence. Runner results, assertion records and timeline events remain phased to their scheduled days.
+- **Verification limitation:** this environment had GitHub API access but no executable repository checkout/terminal. No local tests, migration execution or local security tooling were run. CI is the executable verification for the documentation commits.
+- **LinkedIn:** no draft or publishing work during the plan. Post preparation is deferred until Day 30 is complete.

@@ -170,3 +170,8 @@ Scenario definition/version, run state, step results, assertions and evidence ne
 
 ### Design constraints
 Keep a modular monolith; do not introduce microservices, Kubernetes or a distributed broker without demonstrated need. Keep synthetic data. Do not claim universal exactly-once processing. Record reproducibility parameters and distinguish deterministic from nondeterministic inputs.
+
+
+## Day 4 storage decision (23 November 2026)
+
+The scenario storage design is accepted for incremental implementation. [ADR-001](ADR-001-scenario-storage.md) specifies versioned immutable definitions, frozen run snapshots, relational status/identifier fields with JSONB payloads, planned step/assertion/event evidence tables, query indexes, restrictive retention/deletion behavior and explicit payment-versus-run-evidence transaction boundaries. Day 4 is documentation-only; Day 5 will implement the scheduled initial definition/run persistence slice. No schema or migration was added here.
