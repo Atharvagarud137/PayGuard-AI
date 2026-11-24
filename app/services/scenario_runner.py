@@ -21,7 +21,7 @@ class ScenarioRunner:
                           status=ScenarioRunStatus.RUNNING, started_at=self.clock())
         results = []
         outputs: dict[str, dict] = {}
-        failed_ids: set[str] = {}
+        failed_ids: set[str] = set()
 
         for step in scenario.steps:
             if any(dependency in failed_ids for dependency in step.depends_on):
