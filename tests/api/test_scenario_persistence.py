@@ -16,7 +16,7 @@ def sample_definition(version: int = 1, name: str = "Response-loss retry") -> Sc
         scenario_id="response-loss-retry", name=name, version=version,
         description="Synthetic persistence test", tags=["synthetic", "retry"],
         steps=[ScenarioStepDefinition(step_id="verify", action=ScenarioAction.VERIFY,
-                                     parameters={"merchant_id": "synthetic-merchant", "amount": Decimal("10.00")})],
+                                     parameters={"merchant_id": "synthetic-merchant", "amount": Decimal("10.00"), "amount_as_text": "10.00"})],
         assertions=[
             ScenarioAssertionDefinition(assertion_id="operation-count",
                                        kind=ScenarioAssertionKind.TRANSACTION_COUNT,
@@ -122,6 +122,7 @@ def test_definition_round_trip_preserves_strict_decimal_values(db_session):
     repository.add_definition(definition)
     retrieved = repository.get_definition(definition.scenario_id, definition.version)
     assert retrieved.steps[0].parameters["amount"] == Decimal("10.00")
+    assert retrieved.steps[0].parameters["amount_as_text"] == "10.00"
     assert retrieved.assertions[1].expected == Decimal("10.00")
 
 

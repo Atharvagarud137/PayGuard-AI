@@ -2,6 +2,9 @@
 
 import hashlib
 import json
+from datetime import datetime
+from decimal import Decimal
+from enum import Enum
 from typing import Optional
 
 from sqlalchemy import select
@@ -27,7 +30,35 @@ def payload_sha256(payload: dict) -> str:
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
-def _ensure_payload_size(payload: dict) -> None:
+def _json_default(value):
+    if isinstance(value, Decimal):
+        return {"$decimal": str(value)}
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    raise TypeError(f"unsupported scenario payload value: {type(value).__name__}")
+
+
+def scenario_payload(definition: ScenarioDefinition) -> dict:
+    """Encode model values without conflating Decimal and ordinary strings."""
+    python_payload = definition.model_dump(mode="python")
+    encoded = json.dumps(python_payload, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False, default=_json_default)
+    return json.loads(encoded)
+
+
+def _restore_decimal_tags(payload):
+    if isinstance(payload, dict):
+        if set(payload) == {"$decimal"} and isinstance(payload["$decimal"], str):
+            return Decimal(payload["$decimal"])
+        return {key: _restore_decimal_tags(value) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [_restore_decimal_tags(value) for value in payload]
+    return payload
+
+
+def _ensure_payload_size(payload: dict):
     if len(canonical_json(payload).encode("utf-8")) > MAX_SCENARIO_PAYLOAD_BYTES:
         raise ValueError("scenario payload exceeds 64 KiB")
 
@@ -45,7 +76,7 @@ class PostgresScenarioRepository:
     def add_definition(self, definition: ScenarioDefinition, *, schema_version: int = SCHEMA_VERSION) -> ScenarioDefinition:
         if schema_version != SCHEMA_VERSION:
             raise ValueError(f"unsupported scenario schema version: {schema_version}")
-        payload = definition.model_dump(mode="json")
+        payload = scenario_payload(definition)
         _ensure_payload_size(payload)
         row = ScenarioDefinitionDB(
             scenario_id=definition.scenario_id,
@@ -155,7 +186,7 @@ class PostgresScenarioRepository:
         if payload_sha256(payload) != row.definition_sha256:
             raise ScenarioStorageIntegrityError("scenario definition digest mismatch")
         try:
-            definition = ScenarioDefinition.model_validate_json(canonical_json(payload))
+            definition = ScenarioDefinition.model_validate(_restore_decimal_tags(payload))
         except Exception as exc:
             raise ScenarioStorageIntegrityError("persisted scenario definition is invalid") from exc
         if (definition.scenario_id != row.scenario_id or definition.version != row.version
@@ -176,7 +207,7 @@ class PostgresScenarioRepository:
         if payload_sha256(payload) != row.snapshot_sha256:
             raise ScenarioStorageIntegrityError("scenario run snapshot digest mismatch")
         try:
-            scenario = ScenarioDefinition.model_validate_json(canonical_json(payload))
+            scenario = ScenarioDefinition.model_validate(_restore_decimal_tags(payload))
             run = ScenarioRun(
                 run_id=row.run_id, scenario_id=row.scenario_id,
                 scenario_version=row.scenario_version, status=ScenarioRunStatus(row.status),
