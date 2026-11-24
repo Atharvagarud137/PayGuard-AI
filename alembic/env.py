@@ -13,6 +13,8 @@ from app.database_models import (
     IdempotencyRecordDB,
     TransactionDB,
     TransactionEventDB,
+    ScenarioDefinitionDB,
+    ScenarioRunDB,
 )
 
 

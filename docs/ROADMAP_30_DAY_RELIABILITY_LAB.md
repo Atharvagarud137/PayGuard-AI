@@ -114,7 +114,8 @@ The deterministic runner and test results remain authoritative.
 | 2 | Complete (documentation-only) | [`6591b995`](https://github.com/Atharvagarud137/PayGuard-AI/commit/6591b9953c559d8426be05d72a339eaf0ece6e78); evidence commit [`3c999c2`](https://github.com/Atharvagarud137/PayGuard-AI/commit/3c999c2ac7a2cbf28bb55b9df658a243ff1e7fc7) | Runs [#78](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861407842) and [#79](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44861550394) passed all three jobs | Scope reconciliation, README status and Day 1 LinkedIn draft; no scenario-engine code or tests added. |
 | 3 | Complete | [`dd30878`](https://github.com/Atharvagarud137/PayGuard-AI/commit/dd30878bb99ed4f773020e63967ecd6a3592e6be) | CI run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) passed all three jobs: 163 Python/API tests (1 warning), 6 E2E tests (2 warnings), dependency audits passed | Typed scenario/step/assertion/run/result models and 20 schema tests; CI verified. Runner/persistence not implemented. |
 | 4 | Complete (design-only) | [`b3bc41ca`](https://github.com/Atharvagarud137/PayGuard-AI/commit/b3bc41caf47b48277bebf894db937e2ea8325590) | CI run [#83](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45107175082) passed all three jobs | Storage ADR accepted; documentation-only. No local tests or migration execution. Run #82 was cancelled when the evidence correction commit superseded it; #83 verified the current commit. Day 5 persistence remains next. |
-| 5–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
+| 5 | In progress (CI gate) | Code commit pending SHA capture | CI pending | Scenario definitions and run snapshots implemented with migration/repository/tests; CI must verify. Local execution unavailable. |
+| 6–30 | Planned | — | — | Daily increments; failing CI blocks advancement. |
 | LinkedIn series | Deferred until Day 30 completion | — | Engineering evidence only during roadmap | Milestones tracked on Days 1, 7, 10, 16, 22, 26, 29, 30; no new drafts or publishing during the plan. Existing Day 1 draft remains historical and unpublished. |
 
 
@@ -182,3 +183,13 @@ The 30-day plan now focuses on scenario definitions, deterministic assertions, e
 - **CI:** run [#83](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45107175082) passed all three jobs for commit `b3bc41ca`. Run #82 was cancelled when the status correction commit superseded it.
 - **Verification limitation:** this environment had GitHub API access but no executable repository checkout/terminal. No local tests, migration execution or local security tooling were run.
 - **LinkedIn:** no draft or publishing work during the plan. Post preparation is deferred until Day 30 is complete.
+
+
+## Day 5 scenario persistence implementation (24 November 2026)
+
+- **Scope:** insert-only versioned scenario definitions, canonical JSON SHA-256 digests, frozen run snapshots and run-record retrieval/listing.
+- **Migration:** revision \`006_scenario_storage\`, following \`005_audit_reference_without_fk\`.
+- **Runtime privilege boundary:** definitions are SELECT/INSERT only. Runs are SELECT/INSERT with column-level UPDATE permission limited to status and lifecycle/failure fields; snapshot and identifier columns are not writable by the runtime role. Runs and definitions are not deletable by the runtime role.
+- **Tests:** definition round trip, version ordering/uniqueness, run creation and retrieval, snapshot version binding, listing/pagination, invalid inputs and privilege assertions.
+- **CI:** pending for the implementation commit. The scheduled environment has GitHub repository access but no executable repository checkout or local PostgreSQL terminal; CI is the verification gate.
+- **Limitations:** no runner, lifecycle transition service, step/assertion/timeline persistence, failure injection, report export or API routes. No LinkedIn content was prepared.

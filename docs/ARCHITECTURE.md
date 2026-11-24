@@ -175,3 +175,10 @@ Keep a modular monolith; do not introduce microservices, Kubernetes or a distrib
 ## Day 4 storage decision (23 November 2026)
 
 The scenario storage design is accepted for incremental implementation. [ADR-001](ADR-001-scenario-storage.md) specifies versioned immutable definitions, frozen run snapshots, relational status/identifier fields with JSONB payloads, planned step/assertion/event evidence tables, query indexes, restrictive retention/deletion behavior and explicit payment-versus-run-evidence transaction boundaries. Day 4 is documentation-only; Day 5 will implement the scheduled initial definition/run persistence slice. No schema or migration was added here.
+
+
+## Day 5 scenario persistence implementation
+
+The initial persistence increment introduces \`scenario_definitions\` and \`scenario_runs\`. Definitions are insert-only, keyed by logical scenario ID and version, and stored with canonical JSON SHA-256 digests. Runs reference the exact definition version through a restrictive composite foreign key and also retain a frozen JSONB snapshot with its own digest. Queryable run fields include status, lifecycle timestamps and failure reason.
+
+The runtime role may select/insert definitions and runs. Definitions cannot be updated or deleted by the runtime role. Run lifecycle columns are granted update access individually; run identifiers and frozen snapshot fields remain read-only to that role. The migration-owner/runtime-role boundary is retained. This increment does not implement lifecycle-transition orchestration, result/event persistence or a runner.

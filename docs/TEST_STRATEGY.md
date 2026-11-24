@@ -156,3 +156,8 @@ Each daily increment adds relevant regression coverage and runs existing CI. Fai
 ## Day 4 storage design and planned persistence tests
 
 [ADR-001: Scenario definition and run evidence storage](ADR-001-scenario-storage.md) is the accepted design for the upcoming persistence increment. The initial Day 5 tests must cover versioned definition insert/read, canonical digest and snapshot consistency, run creation tied to an exact definition version, uniqueness and positive-version constraints, timestamp/status checks, restrictive references, and runtime/migrator role separation. Subsequent runner/assertion/evidence increments add lifecycle-transition, step/assertion result and append-only event tests. The ADR is a design record, not evidence that persistence tests or migrations have run.
+
+
+## Day 5 persistence tests (24 November 2026)
+
+The persistence increment adds PostgreSQL integration coverage for definition round trips, ordered versions, insert-only version uniqueness, missing-definition handling, run creation, exact-version frozen snapshots, run retrieval/list filtering and pagination, invalid inputs, and runtime column privileges. Canonical digest comparison is also covered. CI remains the verification gate for the migration and integration suite; local PostgreSQL execution was unavailable in the scheduled environment.

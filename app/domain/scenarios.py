@@ -327,3 +327,18 @@ class ScenarioRunResult(ScenarioModel):
                 raise ValueError("failed runs require a failed result or failure_reason")
         return self
 
+
+
+class ScenarioRunRecord(ScenarioModel):
+    """A stored run paired with its immutable scenario definition snapshot."""
+
+    scenario: ScenarioDefinition
+    run: ScenarioRun
+    schema_version: int = Field(default=1, ge=1)
+    snapshot_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_snapshot_reference(self):
+        if self.run.scenario_id != self.scenario.scenario_id or self.run.scenario_version != self.scenario.version:
+            raise ValueError("run record must reference its included scenario snapshot")
+        return self

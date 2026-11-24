@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -433,4 +434,79 @@ class IdempotencyRecordDB(Base):
             "idempotency_key",
             name="uq_idempotency_records_key",
         ),
+    )
+
+
+# ============================================================================
+# Scenario Persistence Models
+# ============================================================================
+
+class ScenarioDefinitionDB(Base):
+    """Insert-only persistence for validated, versioned scenario definitions."""
+
+    __tablename__ = "scenario_definitions"
+
+    scenario_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False)
+    definition_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    definition_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("version >= 1", name="ck_scenario_definitions_version_positive"),
+        CheckConstraint("schema_version >= 1", name="ck_scenario_definitions_schema_version_positive"),
+        CheckConstraint("definition_sha256 ~ '^[0-9a-f]{64}$'",
+                       name="ck_scenario_definitions_digest_format"),
+    )
+
+
+class ScenarioRunDB(Base):
+    """Run lifecycle record with a frozen, hashed scenario definition snapshot."""
+
+    __tablename__ = "scenario_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    scenario_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    scenario_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    snapshot_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    snapshot_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["scenario_id", "scenario_version"],
+            ["scenario_definitions.scenario_id", "scenario_definitions.version"],
+            name="fk_scenario_runs_definition_version", ondelete="RESTRICT",
+        ),
+        CheckConstraint("scenario_version >= 1", name="ck_scenario_runs_scenario_version_positive"),
+        CheckConstraint("schema_version >= 1", name="ck_scenario_runs_schema_version_positive"),
+        CheckConstraint("status IN ('pending', 'running', 'passed', 'failed', 'cancelled')",
+                       name="ck_scenario_runs_status"),
+        CheckConstraint(
+            "(status = 'pending' AND started_at IS NULL AND finished_at IS NULL) OR "
+            "(status = 'running' AND started_at IS NOT NULL AND finished_at IS NULL) OR "
+            "(status IN ('passed', 'failed', 'cancelled') AND started_at IS NOT NULL "
+            "AND finished_at IS NOT NULL AND finished_at >= started_at)",
+            name="ck_scenario_runs_lifecycle",
+        ),
+        CheckConstraint("status <> 'passed' OR failure_reason IS NULL",
+                       name="ck_scenario_runs_passed_without_failure_reason"),
+        CheckConstraint("snapshot_sha256 ~ '^[0-9a-f]{64}$'",
+                       name="ck_scenario_runs_snapshot_digest_format"),
+        Index("ix_scenario_runs_scenario_version_created",
+              "scenario_id", "scenario_version", "created_at"),
+        Index("ix_scenario_runs_status_created", "status", "created_at"),
     )

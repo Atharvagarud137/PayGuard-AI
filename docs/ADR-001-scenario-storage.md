@@ -104,3 +104,8 @@ No hard-delete API is planned for scenario versions or run evidence in the initi
 - The runner must use explicit transaction boundaries and identifiers to capture ambiguous outcomes.
 - The implementation is phased. Day 5 starts with definition/run persistence; runner results, assertion results and timeline events arrive in their scheduled increments.
 - This ADR does not claim implementation, tests, PCI compliance or real payment processing.
+
+
+## Day 5 implementation record (24 November 2026)
+
+The initial persistence slice implements the definition and run tables, canonical JSON digests, insert-only definition versions, frozen run snapshots, composite version references and query indexes. Runtime privileges are restricted to inserts/reads for definitions and lifecycle-column updates for runs. Step/assertion result and timeline persistence, runner transitions and report artifacts remain scheduled for later days. This record is implementation status, not an extension of the accepted design's claims.

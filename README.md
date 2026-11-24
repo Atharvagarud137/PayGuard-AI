@@ -222,3 +222,10 @@ No persistence code, ORM tables or migration were added on Day 4. This environme
 - **CI:** run [#83](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45107175082) passed Python unit/API, dashboard E2E and dependency-security jobs.
 - **Superseded run:** #82 was cancelled when the follow-up status correction commit was pushed; run #83 verified the current Day 4 commit.
 - **Limitations:** documentation-only work. No local test execution, migration execution or local security-tool run was possible in this environment. No scenario persistence code or migration was added.
+
+
+## Day 5 scenario persistence (24 November 2026)
+
+The Day 5 persistence increment is implemented on \`main\` and awaiting its CI gate. It adds insert-only, versioned scenario-definition storage, canonical SHA-256 payload digests, run creation from an exact persisted version, and frozen JSONB snapshots. Run status fields are queryable, and runtime permissions allow lifecycle-column updates without granting changes to definition versions or run snapshots.
+
+The implementation adds PostgreSQL tables and an Alembic migration, a repository for definition/version and run-snapshot CRUD, integration tests, and restricted runtime privileges. No runner, step/assertion evidence tables, failure injection, report export or API endpoints were added in this increment. Local execution is unavailable in this scheduled environment; CI is the verification gate.
