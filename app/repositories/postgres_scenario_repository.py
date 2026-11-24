@@ -115,7 +115,7 @@ class PostgresScenarioRepository:
             raise ValueError("scenario definition version does not exist")
 
         definition = self._verify_definition_row(definition_row)
-        payload = definition.model_dump(mode="json")
+        payload = scenario_payload(definition)
         _ensure_payload_size(payload)
         digest = payload_sha256(payload)
         run = ScenarioRun(scenario_id=definition.scenario_id, scenario_version=definition.version)
