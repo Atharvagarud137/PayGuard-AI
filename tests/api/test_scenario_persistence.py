@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -15,10 +16,16 @@ def sample_definition(version: int = 1, name: str = "Response-loss retry") -> Sc
         scenario_id="response-loss-retry", name=name, version=version,
         description="Synthetic persistence test", tags=["synthetic", "retry"],
         steps=[ScenarioStepDefinition(step_id="verify", action=ScenarioAction.VERIFY,
-                                     parameters={"merchant_id": "synthetic-merchant"})],
-        assertions=[ScenarioAssertionDefinition(assertion_id="operation-count",
-                                               kind=ScenarioAssertionKind.TRANSACTION_COUNT,
-                                               expected=0)],
+                                     parameters={"merchant_id": "synthetic-merchant", "amount": Decimal("10.00")})],
+        assertions=[
+            ScenarioAssertionDefinition(assertion_id="operation-count",
+                                       kind=ScenarioAssertionKind.TRANSACTION_COUNT,
+                                       expected=0),
+            ScenarioAssertionDefinition(assertion_id="amount",
+                                       kind=ScenarioAssertionKind.AMOUNT_INVARIANT,
+                                       target_step_id="verify",
+                                       expected=Decimal("10.00")),
+        ],
         created_at=NOW,
     )
 
@@ -107,3 +114,25 @@ def test_digest_detects_changed_payload():
     changed = dict(original)
     changed["name"] = "Altered"
     assert payload_sha256(original) != payload_sha256(changed)
+
+
+def test_definition_round_trip_preserves_strict_decimal_values(db_session):
+    repository = PostgresScenarioRepository(db_session)
+    definition = sample_definition()
+    repository.add_definition(definition)
+    retrieved = repository.get_definition(definition.scenario_id, definition.version)
+    assert retrieved.steps[0].parameters["amount"] == Decimal("10.00")
+    assert retrieved.assertions[1].expected == Decimal("10.00")
+
+
+def test_definition_payload_size_is_bounded(db_session):
+    repository = PostgresScenarioRepository(db_session)
+    oversized = sample_definition().model_copy(update={
+        "steps": [
+            sample_definition().steps[0].model_copy(update={
+                "parameters": {"merchant_id": "synthetic", "payload": "x" * 70000}
+            })
+        ]
+    })
+    with pytest.raises(ValueError, match="64 KiB"):
+        repository.add_definition(oversized)

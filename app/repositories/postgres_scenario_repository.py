@@ -12,6 +12,7 @@ from app.domain.scenarios import ScenarioDefinition, ScenarioRun, ScenarioRunRec
 
 
 SCHEMA_VERSION = 1
+MAX_SCENARIO_PAYLOAD_BYTES = 64 * 1024
 
 
 class ScenarioStorageIntegrityError(RuntimeError):
@@ -24,6 +25,11 @@ def canonical_json(payload: dict) -> str:
 
 def payload_sha256(payload: dict) -> str:
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def _ensure_payload_size(payload: dict) -> None:
+    if len(canonical_json(payload).encode("utf-8")) > MAX_SCENARIO_PAYLOAD_BYTES:
+        raise ValueError("scenario payload exceeds 64 KiB")
 
 
 class PostgresScenarioRepository:
@@ -40,6 +46,7 @@ class PostgresScenarioRepository:
         if schema_version != SCHEMA_VERSION:
             raise ValueError(f"unsupported scenario schema version: {schema_version}")
         payload = definition.model_dump(mode="json")
+        _ensure_payload_size(payload)
         row = ScenarioDefinitionDB(
             scenario_id=definition.scenario_id,
             version=definition.version,
@@ -78,6 +85,7 @@ class PostgresScenarioRepository:
 
         definition = self._verify_definition_row(definition_row)
         payload = definition.model_dump(mode="json")
+        _ensure_payload_size(payload)
         digest = payload_sha256(payload)
         run = ScenarioRun(scenario_id=definition.scenario_id, scenario_version=definition.version)
         record = ScenarioRunRecord(
@@ -138,10 +146,16 @@ class PostgresScenarioRepository:
                 f"unsupported persisted definition schema version: {row.schema_version}"
             )
         payload = row.definition_json
-        if not isinstance(payload, dict) or payload_sha256(payload) != row.definition_sha256:
+        if not isinstance(payload, dict):
+            raise ScenarioStorageIntegrityError("scenario definition payload is not a JSON object")
+        try:
+            _ensure_payload_size(payload)
+        except ValueError as exc:
+            raise ScenarioStorageIntegrityError("persisted scenario definition exceeds size limit") from exc
+        if payload_sha256(payload) != row.definition_sha256:
             raise ScenarioStorageIntegrityError("scenario definition digest mismatch")
         try:
-            definition = ScenarioDefinition.model_validate(payload)
+            definition = ScenarioDefinition.model_validate_json(canonical_json(payload))
         except Exception as exc:
             raise ScenarioStorageIntegrityError("persisted scenario definition is invalid") from exc
         if (definition.scenario_id != row.scenario_id or definition.version != row.version
@@ -153,10 +167,16 @@ class PostgresScenarioRepository:
     @staticmethod
     def _verify_run_row(row: ScenarioRunDB) -> ScenarioRunRecord:
         payload = row.snapshot_json
-        if not isinstance(payload, dict) or payload_sha256(payload) != row.snapshot_sha256:
+        if not isinstance(payload, dict):
+            raise ScenarioStorageIntegrityError("scenario run snapshot is not a JSON object")
+        try:
+            _ensure_payload_size(payload)
+        except ValueError as exc:
+            raise ScenarioStorageIntegrityError("persisted scenario run snapshot exceeds size limit") from exc
+        if payload_sha256(payload) != row.snapshot_sha256:
             raise ScenarioStorageIntegrityError("scenario run snapshot digest mismatch")
         try:
-            scenario = ScenarioDefinition.model_validate(payload)
+            scenario = ScenarioDefinition.model_validate_json(canonical_json(payload))
             run = ScenarioRun(
                 run_id=row.run_id, scenario_id=row.scenario_id,
                 scenario_version=row.scenario_version, status=ScenarioRunStatus(row.status),

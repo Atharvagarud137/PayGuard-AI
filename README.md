@@ -226,6 +226,6 @@ No persistence code, ORM tables or migration were added on Day 4. This environme
 
 ## Day 5 scenario persistence (24 November 2026)
 
-The Day 5 persistence increment is implemented on \`main\` and awaiting its CI gate. It adds insert-only, versioned scenario-definition storage, canonical SHA-256 payload digests, run creation from an exact persisted version, and frozen JSONB snapshots. Run status fields are queryable, and runtime permissions allow lifecycle-column updates without granting changes to definition versions or run snapshots.
+The Day 5 persistence increment is implemented on \`main\`. CI run [#86](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321126812) passed all three jobs for the corrected import commit. A follow-up adds strict Decimal JSON revalidation and a 64 KiB payload limit before Day 5 can close. It includes insert-only, versioned scenario-definition storage, canonical SHA-256 payload digests, run creation from an exact persisted version, and frozen JSONB snapshots. Run status fields are queryable, and runtime permissions allow lifecycle-column updates without granting changes to definition versions or run snapshots.
 
 The implementation adds PostgreSQL tables and an Alembic migration, a repository for definition/version and run-snapshot CRUD, integration tests, and restricted runtime privileges. No runner, step/assertion evidence tables, failure injection, report export or API endpoints were added in this increment. Local execution is unavailable in this scheduled environment; CI is the verification gate.
