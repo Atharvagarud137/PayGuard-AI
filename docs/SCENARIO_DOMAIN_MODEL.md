@@ -1,12 +1,12 @@
 # PayGuard-AI scenario domain model
 
-**Status date: 22 November 2026 (Day 3).** The typed schema layer and validation tests are implemented in this increment. GitHub Actions run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) passed all three jobs: 163 Python/unit/API tests (1 warning), 6 E2E tests (2 warnings) and dependency audits. The separate temporary isolated schema run also passed 20 tests using a minimal `TransactionStatus` stub, but it was not full-repository verification. Scenario persistence and execution are not implemented.
+**Status date: 25 November 2026.** Day 3's typed schema layer, Day 5's versioned definition/run storage and Day 6's in-memory runner skeleton are implemented. GitHub Actions run [#91](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45359793956) passed all three jobs: 180 Python/unit/API tests (1 warning), 6 E2E tests (2 warnings) and dependency audits. The Day 3 isolated schema run is historical evidence, not full-repository verification.
 
 ## Boundary
 
 Scenario definitions are declarative data, not executable code. They contain a typed action enum, scalar parameters, ordered dependencies and typed assertions. The schema rejects undeclared model fields, nested parameter values and parameter names commonly used for executable payloads (`script`, `command`, `cmd`, `executable`, `expression`, `eval`, `shell`). These restrictions are a schema boundary, not a substitute for future runner-side validation or security review.
 
-The schema module does not execute actions, invoke payment APIs, persist scenarios, perform failure injection or produce reports from actual runs.
+The schema module itself does not execute actions or invoke payment APIs. Scenario persistence and basic execution are provided by separate storage and runner modules; failure injection and report generation remain future work.
 
 ## Definition schemas
 
@@ -14,7 +14,7 @@ The schema module does not execute actions, invoke payment APIs, persist scenari
 - **ScenarioStepDefinition:** stable step ID, one of the declared actions, inert scalar parameters and dependencies on earlier steps.
 - **ScenarioAssertionDefinition:** stable assertion ID, one of the declared assertion kinds, typed expected value and optional target step.
 
-Actions currently represented in the schema are `authorize`, `capture`, `settle`, `refund`, `response_loss_after_commit`, `retry` and `verify`. Assertion kinds are `step_status`, `transaction_status`, `idempotency_replay`, `transaction_count`, `amount_invariant` and `audit_integrity`. These enum values are contracts for future runner work; they are not yet executable capabilities.
+Actions currently represented in the schema are `authorize`, `capture`, `settle`, `refund`, `response_loss_after_commit`, `retry` and `verify`. Assertion kinds are `step_status`, `transaction_status`, `idempotency_replay`, `transaction_count`, `amount_invariant` and `audit_integrity`. These enum values are accepted action identifiers. The Day 6 runner dispatches only to handlers explicitly injected by its caller; the enum does not grant default implementations or permit arbitrary code.
 
 ## Run/result schemas
 
@@ -35,6 +35,4 @@ The schemas validate lifecycle timestamp combinations, timezone-aware timestamps
 - Monetary assertion values are non-negative finite decimals with at most two fractional places.
 - Passed runs require every defined step and assertion to have a passing result.
 
-## Not yet designed or implemented
-
-The storage/migration decision, persistence lifecycle, action-specific parameter contracts, runner semantics, failure-injection controls, evidence retention and report export are subsequent roadmap work. Day 4 will document storage design before implementation. No real payment data or production credentials are permitted.
+## Day 6 runner skeleton\n\n`ScenarioRunner` receives an explicit action-to-handler mapping and an optional clock. It runs steps in their declared order, passes a copy of accumulated outputs to each handler, captures validated scalar outputs, sanitizes exceptions, marks dependent steps skipped after failures, and continues independent steps. A missing handler is a step failure. Results are returned in a `ScenarioRunResult` object and are not persisted by the runner.\n\nThe runner deliberately leaves run status `RUNNING` and assertion results empty until Day 7 implements assertion evaluation and finalization. Six tests cover order/context, missing-handler dependency skips, dependent failure with independent continuation, output rejection/sanitization, Decimal output and the non-finalized run lifecycle. CI run #91 passed these tests as part of the 180-test Python/unit/API suite.\n\n## Remaining roadmap work\n\n

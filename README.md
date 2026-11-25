@@ -6,9 +6,9 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 > **Data boundary:** use synthetic test data only. Do not submit or store real PANs, CVVs/CVCs, cardholder data, payment credentials, or production transaction data.
 
-## Current status (22 November 2026)
+## Current status (25 November 2026)
 
-The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseline gate, Day 2's documentation scope and Day 3's typed schema increment are complete. Scenario schema commit `dd30878` passed all three GitHub Actions jobs in run [#80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809): 163 Python/unit/API tests passed (1 warning), 6 dashboard E2E tests passed (2 warnings), and dependency audits passed. Day 1 and Day 2 evidence remains recorded in the roadmap. This scheduled environment did not run a full local repository suite or local security tools.
+Days 1–5 are complete and Day 6's deterministic runner skeleton is implemented and verified. Runner fix commit `ab432a3` passed GitHub Actions run [#91](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45359793956): 180 Python/unit/API tests passed (1 warning), 6 dashboard E2E tests passed (2 warnings), and both dependency audits passed. Day 6 evidence and remaining limits are recorded in the roadmap. This scheduled environment has GitHub API access but no executable repository checkout/terminal, so no local suite or local audit was run for Day 6.
 
 | Area | Current state |
 |---|---|
@@ -19,10 +19,10 @@ The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseli
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| Scenario domain model | Typed declarative schemas and validation tests implemented; run #80 passed. Runner and persistence are not implemented. |
-| API/unit | 143 passed locally at baseline; 163 passed in CI run #80 (1 warning) |
-| Browser E2E | 6 passed in CI run #80 (2 warnings); local E2E remains unrun |
-| Dependency audits | Passed in run #80 |
+| Scenario lab | Typed scenario models, versioned PostgreSQL definition/run snapshots, and an in-memory deterministic runner skeleton implemented; assertions/finalization and step-result persistence remain pending. |
+| API/unit | 180 passed in CI run #91 (1 warning); Day 1 baseline remains 143 local tests recorded |
+| Browser E2E | 6 passed in CI run #91 (2 warnings); local E2E remains unrun |
+| Dependency audits | Passed in CI run #91 |
 | AI RCA / test generation | Planned, not implemented |
 | OpenTelemetry / metrics | Not implemented |
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
@@ -30,9 +30,9 @@ The 30-day Payment Integration Reliability Lab roadmap is active. Day 1's baseli
 
 These results apply to the reviewed commit; they do not guarantee future runs. Local Python syntax compilation, Alembic head/history checks, the dashboard production build, and all 143 Python unit/API tests completed successfully. The prior `pytest-results.txt` run recorded 149 setup errors because no database URL was configured; those errors preceded test assertions and were resolved by using an isolated disposable PostgreSQL container. Local browser E2E was skipped because port 8000 is used by another project; its CI job passed. See [the roadmap baseline record](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md) for details.
 
-## Scenario domain model
+## Scenario lab foundation
 
-The Day 3 schema increment defines scenario, step, assertion, run and result models with status enums, ordered dependencies, reference checks and lifecycle validation. Parameters and outputs are limited to inert scalar values; no runner or persistence is included. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md). The schema suite has 20 tests; all were included in the 163-test Python/API CI suite in run #80. A separate isolated run also passed 20 tests using a minimal `TransactionStatus` stub, but it was not full-repository verification.
+Day 3 added typed scenario/step/assertion/run/result schemas; Day 5 added versioned PostgreSQL definitions and frozen run snapshots; Day 6 added an in-memory deterministic runner skeleton using caller-injected handlers. It processes steps in declared order, passes prior outputs as context, skips dependent steps after failure, continues independent steps and returns sanitized step results. It does not evaluate assertions, finalize run status or persist step results. Six runner tests are included in CI run #91, which passed all three jobs. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md) and [the roadmap](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md).
 
 ## Payment lifecycle
 
@@ -115,7 +115,7 @@ These are code-level controls, not a complete identity platform. There is no per
 |---|---|
 | [Product requirements](docs/PRD.md) | Product scope, non-goals and requirements |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, transactions, locks, idempotency and audit |
-| [Scenario domain model](docs/SCENARIO_DOMAIN_MODEL.md) | Day 3 typed schema boundaries and validation rules; execution/persistence remain future work. |
+| [Scenario domain model](docs/SCENARIO_DOMAIN_MODEL.md) | Typed contracts, storage boundary and Day 6 runner behavior/limitations. |
 | [API specification](docs/API_SPEC.md) | Routes, headers, request behavior and responses |
 | [Test strategy](docs/TEST_STRATEGY.md) | PostgreSQL integration, concurrency, security and E2E tests |
 | [Technology stack](docs/TECH_STACK.md) | Runtime and development tools |
@@ -163,13 +163,13 @@ CI run #39 used Python 3.12, PostgreSQL 16 and Node.js 22. It ran the Python uni
 
 ## Current limitations and roadmap
 
-1. Complete the Day 1 baseline review. GitHub CI run #73 is green, but local full-suite execution and deeper source/security review remain pending due to lack of an executable repository workspace.
-2. Pivot into a Payment Integration Reliability Lab: scenario engine, deterministic assertions, structured evidence and replay.
-3. Implement ambiguous outcomes and retry/idempotency scenarios.
-4. Implement durable webhook simulation, retries, ordering and delivery evidence.
-5. Add controlled concurrency/race testing and invariant-based reports.
-6. Add CLI, sample merchant target and Docker Compose usability.
-7. Consider evidence-grounded AI assistance only after the deterministic reliability lab is established.
+1. Day 7: deterministic assertion evaluation and run finalization, with positive/negative tests.
+2. Days 8–10: timeline/evidence records, report schema/export and deterministic replay.
+3. Days 11–16: stage-aware failure injection, ambiguous outcomes, retry/idempotency and crash/recovery tests.
+4. Days 17–22: webhook model, outbox, delivery worker, retries, faults, ordering and synthetic signatures.
+5. Days 23–26: controlled concurrency/race scenarios and evidence-grounded reports.
+6. Days 27–30: CLI, sample merchant, Docker Compose, Vercel dashboard staging and final readiness decision.
+7. AI assistance remains deferred until the deterministic reliability foundation is complete.
 
 No PCI DSS compliance, production payment capability, regulatory certification, or unrestricted exactly-once processing is claimed.
 
@@ -178,7 +178,7 @@ No PCI DSS compliance, production payment capability, regulatory certification, 
 
 PayGuard-AI's product direction is now to test how integrations behave under reproducible failure conditions, rather than expand the simulated gateway as an end in itself. The simulator remains infrastructure inside the lab.
 
-The planned core capabilities are scenario execution, controlled ambiguous outcomes (such as commit followed by response loss), retry/idempotency testing, durable webhook simulation, concurrency/race testing, deterministic assertions, structured evidence, replay and exportable reports. AI analysis is deferred until the deterministic runner and evidence pipeline are mature.
+The planned capabilities include controlled ambiguous outcomes (such as commit followed by response loss), retry/idempotency testing, durable webhook simulation, concurrency/race testing, deterministic assertions, structured evidence, replay and exportable reports. Scenario definitions, storage and the basic in-memory runner are implemented; the remaining capabilities are still roadmap items. AI analysis is deferred until the deterministic runner and evidence pipeline are mature.
 
 **This pivot is a roadmap, not a claim that these features already exist.** The current implementation remains the synthetic payment lifecycle and reliability foundation described above.
 
@@ -213,7 +213,7 @@ The product-scope gate is complete as a documentation-only increment. README, PR
 
 Day 4 is complete as a design-only increment. Commit `b3bc41ca` was verified by GitHub Actions run [#83](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45107175082), which passed all three jobs. The accepted storage decision is documented in [ADR-001: Scenario storage and run evidence](docs/ADR-001-scenario-storage.md). The design uses the existing PostgreSQL database, versioned immutable scenario definitions, run records with frozen definition snapshots, and phased step/assertion/event evidence tables. It preserves the Alembic migration-owner/runtime-role split and explicitly addresses transaction boundaries for ambiguous post-commit outcomes.
 
-No persistence code, ORM tables or migration were added on Day 4. This environment had GitHub repository access but no executable repository checkout/terminal, so no local tests, migration execution or local security tools were run. The next increment is Day 5 persistence, limited to the scheduled definition/run storage scope and verified by CI.
+No persistence code, ORM tables or migration were added on Day 4. Day 5 subsequently implemented definition/run snapshot storage; see the Day 5 record. Day 4 local tests, migration execution and local security tooling were not run.
 
 
 ### Day 4 verification evidence
@@ -226,7 +226,7 @@ No persistence code, ORM tables or migration were added on Day 4. This environme
 
 ## Day 5 scenario persistence (24 November 2026)
 
-The Day 5 persistence increment is implemented on `main`. CI run [#86](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321126812) passed all three jobs for the corrected import commit. Follow-up CI run [#87](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321422221) exposed a Decimal type-preservation bug, corrected with tagged Decimal payloads. Run [#88](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321699636) then exposed one remaining path: run creation still used ordinary JSON serialization rather than the tagged payload helper. The fix is now pending CI. Both runs had passing E2E and dependency audits. The increment includes insert-only, versioned scenario-definition storage, canonical SHA-256 payload digests, run creation from an exact persisted version, and frozen JSONB snapshots. Run status fields are queryable, and runtime permissions allow lifecycle-column updates without granting changes to definition versions or run snapshots.
+The Day 5 persistence increment is implemented on `main`. CI runs [#87](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321422221) and [#88](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321699636) exposed Decimal and tagged-snapshot serialization defects; the final correction was verified by run [#89](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45321910212), which passed all three jobs. The increment includes insert-only, versioned scenario-definition storage, canonical SHA-256 payload digests, run creation from an exact persisted version, and frozen JSONB snapshots. Run status fields are queryable, and runtime permissions allow lifecycle-column updates without granting changes to definition versions or run snapshots.
 
 The implementation adds PostgreSQL tables and an Alembic migration, a repository for definition/version and run-snapshot CRUD, integration tests, and restricted runtime privileges. No runner, step/assertion evidence tables, failure injection, report export or API endpoints were added in this increment. Local execution is unavailable in this scheduled environment; CI is the verification gate.
-\n\n## Scenario runner skeleton (Day 6)\n\nThe runner uses caller-injected action handlers and executes declared steps in deterministic order. It captures scalar outputs, sanitizes handler errors, skips steps whose dependencies failed, and continues independent steps. Assertion evaluation and final run status are deferred to Day 7; it does not claim success while assertion results are absent. CI verification pending.\n\n## Deployment plan\n\nThe roadmap targets Vercel dashboard staging on Day 29 and final deployment/readiness validation on Day 30. Vercel hosts the dashboard; the Python API requires separately configured and verified backend hosting. Deployment depends on secure configuration, API reachability, CORS and synthetic-only validation.\n
+\n\n## Day 6 runner skeleton (25 November 2026)\n\nThe runner is implemented in `app/services/scenario_runner.py` with caller-injected handlers. It executes steps in declared order, passes previous outputs to handlers, rejects invalid/nested outputs through schema validation, sanitizes handler failures, skips dependent steps after failures and continues independent steps. Six runner tests are included in CI run [#91](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45359793956), which passed all three jobs.\n\nThe returned result is in-memory only. Assertions and finalization are Day 7 scope; run status deliberately remains `RUNNING` and assertion results remain empty. Step-level execution evidence is not persisted to PostgreSQL yet. No local execution was performed in this scheduled environment.\n\n## Deployment plan\n\nThe roadmap targets Vercel dashboard staging on Day 29 and final deployment/readiness validation on Day 30. Vercel hosts the dashboard; the Python API requires separately configured and verified backend hosting. Deployment depends on secure configuration, API reachability, CORS and synthetic-only validation.
