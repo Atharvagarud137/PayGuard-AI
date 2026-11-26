@@ -6,9 +6,9 @@ PayGuard-AI models a payment lifecycle with FastAPI, PostgreSQL, a React/TypeScr
 
 > **Data boundary:** use synthetic test data only. Do not submit or store real PANs, CVVs/CVCs, cardholder data, payment credentials, or production transaction data.
 
-## Current status (25 November 2026)
+## Current status (26 November 2026)
 
-Days 1–5 are complete and Day 6's deterministic runner skeleton is implemented and verified. Runner fix commit `ab432a3` passed GitHub Actions run [#91](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45359793956): 180 Python/unit/API tests passed (1 warning), 6 dashboard E2E tests passed (2 warnings), and both dependency audits passed. Day 6 evidence and remaining limits are recorded in the roadmap. This scheduled environment has GitHub API access but no executable repository checkout/terminal, so no local suite or local audit was run for Day 6.
+Days 1–6 are complete. Day 7's deterministic assertion evaluation and run finalization are implemented and verified by GitHub Actions run [#93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) for commit `b54258c`. All three CI jobs passed: Python/unit/API, dashboard E2E, and dependency security audit. Exact test counts were not available from the inspected CI API response. This environment has GitHub API access but no executable repository checkout/terminal, so no local suite or local audit was run.
 
 | Area | Current state |
 |---|---|
@@ -19,10 +19,10 @@ Days 1–5 are complete and Day 6's deterministic runner skeleton is implemented
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| Scenario lab | Typed scenario models, versioned PostgreSQL definition/run snapshots, and an in-memory deterministic runner skeleton implemented; assertions/finalization and step-result persistence remain pending. |
-| API/unit | 180 passed in CI run #91 (1 warning); Day 1 baseline remains 143 local tests recorded |
-| Browser E2E | 6 passed in CI run #91 (2 warnings); local E2E remains unrun |
-| Dependency audits | Passed in CI run #91 |
+| Scenario lab | Typed scenario models, versioned PostgreSQL definition/run snapshots, deterministic in-memory step runner, assertion registry and run finalization implemented. Step results remain in-memory. |
+| API/unit | CI run #93 passed the Python unit/API job; exact count not exposed in the inspected API metadata |
+| Browser E2E | CI run #93 passed the dashboard E2E job; local E2E remains unrun |
+| Dependency audits | Python and JavaScript audits passed in CI run #93 |
 | AI RCA / test generation | Planned, not implemented |
 | OpenTelemetry / metrics | Not implemented |
 | Distributed rate limiting | Not implemented; deployment gateway/reverse proxy responsibility |
@@ -32,7 +32,7 @@ These results apply to the reviewed commit; they do not guarantee future runs. L
 
 ## Scenario lab foundation
 
-Day 3 added typed scenario/step/assertion/run/result schemas; Day 5 added versioned PostgreSQL definitions and frozen run snapshots; Day 6 added an in-memory deterministic runner skeleton using caller-injected handlers. It processes steps in declared order, passes prior outputs as context, skips dependent steps after failure, continues independent steps and returns sanitized step results. It does not evaluate assertions, finalize run status or persist step results. Six runner tests are included in CI run #91, which passed all three jobs. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md) and [the roadmap](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md).
+Day 3 added typed scenario/step/assertion/run/result schemas; Day 5 added versioned PostgreSQL definitions and frozen run snapshots; Day 6 added deterministic injected-handler step execution; Day 7 evaluates six assertion kinds against scalar step-output observations and finalizes the run as PASSED only when every step and assertion passes. Missing/type-invalid observations fail assertions. Results remain in-memory and handlers are caller-injected. CI run #93 passed all three jobs. See [the scenario domain model specification](docs/SCENARIO_DOMAIN_MODEL.md) and [the roadmap](docs/ROADMAP_30_DAY_RELIABILITY_LAB.md).
 
 ## Payment lifecycle
 

@@ -1,6 +1,6 @@
 # PayGuard-AI scenario domain model
 
-**Status date: 25 November 2026.** Day 3's typed schema layer, Day 5's versioned definition/run storage and Day 6's in-memory runner skeleton are implemented. GitHub Actions run [#91](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45359793956) passed all three jobs: 180 Python/unit/API tests (1 warning), 6 E2E tests (2 warnings) and dependency audits. The Day 3 isolated schema run is historical evidence, not full-repository verification.
+**Status date: 26 November 2026.** Day 3's typed schema layer, Day 5's versioned definition/run storage, Day 6's deterministic runner and Day 7's assertion registry/finalization are implemented. GitHub Actions run [#93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) passed all three jobs. Exact test counts were not available in the inspected CI API response. The Day 3 isolated schema run is historical evidence, not full-repository verification.
 
 ## Boundary
 
@@ -35,4 +35,21 @@ The schemas validate lifecycle timestamp combinations, timezone-aware timestamps
 - Monetary assertion values are non-negative finite decimals with at most two fractional places.
 - Passed runs require every defined step and assertion to have a passing result.
 
-## Day 6 runner skeleton\n\n`ScenarioRunner` receives an explicit action-to-handler mapping and an optional clock. It runs steps in their declared order, passes a copy of accumulated outputs to each handler, captures validated scalar outputs, sanitizes exceptions, marks dependent steps skipped after failures, and continues independent steps. A missing handler is a step failure. Results are returned in a `ScenarioRunResult` object and are not persisted by the runner.\n\nThe runner deliberately leaves run status `RUNNING` and assertion results empty until Day 7 implements assertion evaluation and finalization. Six tests cover order/context, missing-handler dependency skips, dependent failure with independent continuation, output rejection/sanitization, Decimal output and the non-finalized run lifecycle. CI run #91 passed these tests as part of the 180-test Python/unit/API suite.\n\n## Remaining roadmap work\n\n
+## Day 6 runner skeleton\n\n`ScenarioRunner` receives an explicit action-to-handler mapping and an optional clock. It runs steps in their declared order, passes a copy of accumulated outputs to each handler, captures validated scalar outputs, sanitizes exceptions, marks dependent steps skipped after failures, and continues independent steps. A missing handler is a step failure. Results are returned in a `ScenarioRunResult` object and are not persisted by the runner.\n\nThe runner deliberately left run status `RUNNING` and assertion results empty through Day 6. Day 7 now evaluates assertions and finalizes runs. Run results and assertion observations remain in-memory only.\n\n## Remaining roadmap work\n\n
+
+## Day 7 assertion evaluation and finalization (26 November 2026)
+
+`AssertionRegistry` evaluates the six schema-defined assertion kinds deterministically:
+
+- `step_status`: compares the target step's result status.
+- `transaction_status`: reads the target step's `transaction_status` output (string values are normalized to the payment status enum).
+- `idempotency_replay`: reads the `idempotency_replay` boolean output.
+- `transaction_count`: reads the `transaction_count` integer output.
+- `amount_invariant`: reads the `amount_invariant` Decimal output.
+- `audit_integrity`: reads the `audit_integrity` boolean output.
+
+For non-status assertions, an explicit target step restricts the observation source. Without a target, the latest step in declared scenario order containing the observation key is used. Missing or type-invalid observations fail rather than silently pass. Messages are generic and do not include arbitrary handler values.
+
+Assertions are evaluated after step execution. The run is finalized as `PASSED` only when all defined steps and assertions pass; otherwise it is `FAILED` with a generic failure reason. Assertion results and step outputs are not persisted yet. CI run [#93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) passed all three jobs.
+
+**Limits:** observations come from caller-injected handlers, not live payment/database/audit queries. No default action handlers, persisted evidence, report export or replay are added here. No local suite was executed because this environment lacks an executable checkout/terminal.

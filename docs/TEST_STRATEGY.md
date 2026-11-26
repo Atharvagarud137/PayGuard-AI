@@ -1,6 +1,6 @@
 # PayGuard-AI test strategy
 
-**Status date: 22 November 2026.**
+**Status date: 26 November 2026.**
 
 ## Testing objective
 
@@ -17,7 +17,7 @@ Validate payment lifecycle correctness, persistence, transaction atomicity, conc
 
 ## Latest verified CI evidence
 
-GitHub Actions [run #80](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/44981213809) for commit `dd30878` completed successfully on 22 November 2026.
+GitHub Actions [run #93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) for commit `b54258c` completed successfully on 26 November 2026. Run #80 remains the historical Day 3 schema evidence.
 
 | CI job | Result |
 |---|---|
@@ -162,3 +162,9 @@ Each daily increment adds relevant regression coverage and runs existing CI. Fai
 
 The persistence increment adds PostgreSQL integration coverage for definition round trips, ordered versions, insert-only version uniqueness, missing-definition handling, run creation, exact-version frozen snapshots, run retrieval/list filtering and pagination, invalid inputs, and runtime column privileges. Canonical digest comparison, tagged Decimal round trips that preserve numeric strings, and the 64 KiB payload limit are covered. CI run #86 passed all three jobs for the corrected import commit. Run #87 failed 6 persistence tests because plain JSON strings lost Decimal type identity; run #88 failed 3 run-snapshot tests because the create-run path still used the ordinary JSON serializer. The tagged serializer and corrected run-snapshot path are pending CI. Local PostgreSQL execution was unavailable in the scheduled environment.
 \n\n## Day 6 runner skeleton tests\n\nRunner tests cover declared-order execution/context, missing handlers, dependency skips, independent-step continuation, sanitized failures, scalar-output validation, Decimal preservation and the deliberate RUNNING status pending Day 7 assertion evaluation. CI is the verification gate; local execution was unavailable.\n
+
+## Day 7 assertions and finalization
+
+CI run [#93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) passed all three jobs for the Day 7 implementation. The runner evaluates six assertion kinds against scalar step-output observations, fails missing/type-invalid observations, and finalizes run status based on both step and assertion results. Three added tests cover all-kind success, mismatch failure and missing-observation failure. Exact CI test counts were not available through the inspected API metadata, and no local suite was run.
+
+Observations are supplied by injected handlers, not independent live payment, PostgreSQL or audit queries. Step and assertion evidence is not persisted yet.
