@@ -1,14 +1,15 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.domain.scenarios import ScenarioAction, ScenarioAssertionKind, ScenarioAssertionDefinition, ScenarioDefinition, ScenarioStepDefinition, ScenarioStepStatus
+from app.domain.scenarios import (ScenarioAction, ScenarioAssertionKind, ScenarioAssertionDefinition, ScenarioDefinition, ScenarioStepDefinition, ScenarioStepStatus, ScenarioAssertionStatus, ScenarioAssertionResult, ScenarioAssertionDefinition, ScenarioAssertionKind, ScenarioAssertionStatus, ScenarioStepStatus, TransactionStatus)
 from app.services.scenario_runner import ScenarioRunner
 
 NOW = datetime(2026, 11, 25, 9, 0, tzinfo=timezone.utc)
 
 def scenario(steps):
     return ScenarioDefinition(scenario_id="runner-sample", name="Runner sample", steps=steps,
-        assertions=[ScenarioAssertionDefinition(assertion_id="count", kind=ScenarioAssertionKind.TRANSACTION_COUNT, expected=1)])
+        assertions=[ScenarioAssertionDefinition(assertion_id="first-status", kind=ScenarioAssertionKind.STEP_STATUS,
+            target_step_id=steps[0].step_id, expected=ScenarioStepStatus.PASSED)])
 
 def test_order_and_context():
     seen=[]
@@ -23,7 +24,7 @@ def test_order_and_context():
     assert [r.step_id for r in result.step_results]==["first","second"]
     assert all(r.status==ScenarioStepStatus.PASSED for r in result.step_results)
     assert result.step_results[1].output=={"previous":1}
-    assert result.run.status.value=="running"
+    assert result.run.status.value=="passed"
 
 def test_missing_handler_fails_and_skips_dependency():
     result=ScenarioRunner({},clock=lambda:NOW).run(scenario([
@@ -60,9 +61,63 @@ def test_decimal_output_preserved():
         scenario([ScenarioStepDefinition(step_id="first",action=ScenarioAction.VERIFY)]))
     assert result.step_results[0].output["amount"]==Decimal("1.25")
 
-def test_running_status_not_false_pass():
+def test_runner_finalizes_passed_run_and_assertion():
     result=ScenarioRunner({ScenarioAction.VERIFY:lambda p,o:{}},clock=lambda:NOW).run(
         scenario([ScenarioStepDefinition(step_id="first",action=ScenarioAction.VERIFY)]))
     assert result.run.started_at==NOW
-    assert result.run.status.value=="running"
-    assert result.assertion_results==[]
+    assert result.run.finished_at==NOW
+    assert result.run.status.value=="passed"
+    assert result.assertion_results[0].status==ScenarioAssertionStatus.PASSED
+
+
+def test_all_assertion_kinds_pass_and_finalize_run():
+    assertions = [
+        ScenarioAssertionDefinition(assertion_id="step-status", kind=ScenarioAssertionKind.STEP_STATUS,
+            target_step_id="observe", expected=ScenarioStepStatus.PASSED),
+        ScenarioAssertionDefinition(assertion_id="transaction-status", kind=ScenarioAssertionKind.TRANSACTION_STATUS,
+            target_step_id="observe", expected=TransactionStatus.AUTHORIZED),
+        ScenarioAssertionDefinition(assertion_id="replay", kind=ScenarioAssertionKind.IDEMPOTENCY_REPLAY,
+            target_step_id="observe", expected=True),
+        ScenarioAssertionDefinition(assertion_id="count", kind=ScenarioAssertionKind.TRANSACTION_COUNT,
+            target_step_id="observe", expected=1),
+        ScenarioAssertionDefinition(assertion_id="amount", kind=ScenarioAssertionKind.AMOUNT_INVARIANT,
+            target_step_id="observe", expected=Decimal("10.00")),
+        ScenarioAssertionDefinition(assertion_id="audit", kind=ScenarioAssertionKind.AUDIT_INTEGRITY,
+            target_step_id="observe", expected=True),
+    ]
+    sample = ScenarioDefinition(scenario_id="assertions-pass", name="Assertion registry",
+        steps=[ScenarioStepDefinition(step_id="observe", action=ScenarioAction.VERIFY)],
+        assertions=assertions)
+    handler = lambda p, o: {"transaction_status":"AUTHORIZED", "idempotency_replay":True,
+        "transaction_count":1, "amount_invariant":Decimal("10.00"), "audit_integrity":True}
+    result = ScenarioRunner({ScenarioAction.VERIFY:handler}, clock=lambda:NOW).run(sample)
+    assert [r.status for r in result.assertion_results] == [ScenarioAssertionStatus.PASSED]*6
+    assert result.run.status.value == "passed"
+    assert result.run.finished_at == NOW
+
+
+def test_assertion_mismatch_fails_run():
+    assertion = ScenarioAssertionDefinition(assertion_id="count", kind=ScenarioAssertionKind.TRANSACTION_COUNT,
+        target_step_id="observe", expected=2)
+    sample = ScenarioDefinition(scenario_id="assertion-mismatch", name="Mismatch",
+        steps=[ScenarioStepDefinition(step_id="observe", action=ScenarioAction.VERIFY)], assertions=[assertion])
+    result = ScenarioRunner({ScenarioAction.VERIFY:lambda p,o:{"transaction_count":1}},clock=lambda:NOW).run(sample)
+    assertion_result = result.assertion_results[0]
+    assert assertion_result.status == ScenarioAssertionStatus.FAILED
+    assert assertion_result.observed == 1
+    assert assertion_result.message
+    assert result.run.status.value == "failed"
+    assert result.run.finished_at == NOW
+
+
+def test_missing_observation_fails_assertion_without_observed_value():
+    assertion = ScenarioAssertionDefinition(assertion_id="audit", kind=ScenarioAssertionKind.AUDIT_INTEGRITY,
+        expected=True)
+    sample = ScenarioDefinition(scenario_id="missing-observation", name="Missing",
+        steps=[ScenarioStepDefinition(step_id="observe", action=ScenarioAction.VERIFY)], assertions=[assertion])
+    result = ScenarioRunner({ScenarioAction.VERIFY:lambda p,o:{}},clock=lambda:NOW).run(sample)
+    assertion_result = result.assertion_results[0]
+    assert assertion_result.status == ScenarioAssertionStatus.FAILED
+    assert assertion_result.observed is None
+    assert "No observation" in assertion_result.message
+    assert result.run.status.value == "failed"
