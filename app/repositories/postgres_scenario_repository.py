@@ -17,7 +17,7 @@ from app.database_models import (
 )
 from app.domain.scenarios import (
     ScenarioAssertionResult, ScenarioAssertionStatus, ScenarioDefinition, ScenarioRun,
-    ScenarioRunEvent, ScenarioRunResult, ScenarioRunStatus, ScenarioStepResult,
+    ScenarioRunEvent, ScenarioRunRecord, ScenarioRunResult, ScenarioRunStatus, ScenarioStepResult,
     ScenarioStepStatus, ScenarioEventType,
 )
 
