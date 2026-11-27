@@ -107,6 +107,12 @@ jobs:
             ON TABLE public.audit_events FROM payguard_app;
           REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_definitions FROM payguard_app;
           REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_runs FROM payguard_app;
+          REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_step_evidence FROM payguard_app;
+          REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_assertion_evidence FROM payguard_app;
+          REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_run_events FROM payguard_app;
+          GRANT SELECT, INSERT ON TABLE public.scenario_step_evidence TO payguard_app;
+          GRANT SELECT, INSERT ON TABLE public.scenario_assertion_evidence TO payguard_app;
+          GRANT SELECT, INSERT ON TABLE public.scenario_run_events TO payguard_app;
           GRANT UPDATE (status, started_at, finished_at, failure_reason)
             ON TABLE public.scenario_runs TO payguard_app;
           SQL
@@ -209,6 +215,12 @@ jobs:
           GRANT SELECT, INSERT ON TABLE public.audit_events TO payguard_app;
           REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
             ON TABLE public.audit_events FROM payguard_app;
+          REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_step_evidence FROM payguard_app;
+          REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_assertion_evidence FROM payguard_app;
+          REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_run_events FROM payguard_app;
+          GRANT SELECT, INSERT ON TABLE public.scenario_step_evidence TO payguard_app;
+          GRANT SELECT, INSERT ON TABLE public.scenario_assertion_evidence TO payguard_app;
+          GRANT SELECT, INSERT ON TABLE public.scenario_run_events TO payguard_app;
           SQL
 
       - name: Start backend
