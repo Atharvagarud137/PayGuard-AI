@@ -19,7 +19,7 @@ Days 1–6 are complete. Day 7's deterministic assertion evaluation and run fina
 | Audit | PostgreSQL hash chain, integrity verification, DB triggers blocking ordinary update/delete/truncate |
 | Security baseline | Shared service/admin API keys, controlled CORS, safe errors, request-size limit, security headers, redaction |
 | Dashboard | React 19 / TypeScript / Vite 8 |
-| Scenario lab | Typed scenario models, versioned PostgreSQL definition/run snapshots, deterministic in-memory step runner, assertion registry and run finalization implemented. Step results remain in-memory. |
+| Scenario lab | Typed scenario models, versioned PostgreSQL definition/run snapshots, deterministic step runner, assertions, persisted step/assertion evidence and ordered timeline APIs implemented. |
 | API/unit | CI run #93 passed the Python unit/API job; exact count not exposed in the inspected API metadata |
 | Browser E2E | CI run #93 passed the dashboard E2E job; local E2E remains unrun |
 | Dependency audits | Python and JavaScript audits passed in CI run #93 |
@@ -161,10 +161,20 @@ CI run #39 used Python 3.12, PostgreSQL 16 and Node.js 22. It ran the Python uni
 
 **Test-database warning:** fixtures require an already-migrated disposable PostgreSQL database and do not create or drop ORM tables. Point tests only at a dedicated disposable database, never a development or production database.
 
+## Scenario evidence and timeline (Day 8 increment; CI pending)
+
+Scenario runs can be created from an immutable stored scenario version, and a terminal runner result can be submitted against that run ID. Step and assertion results, structured events and the run lifecycle are persisted in one database transaction. Timeline queries return a deterministic sequence; evidence records are ordered by the definition's step/assertion ordinals. The evidence tables are insert-only for the runtime role. Common field names associated with PAN/CVV/CVC, card numbers, raw request/response bodies, credentials, secrets, passwords and API keys are rejected in scalar evidence. This is a key-name guard, not a substitute for synthetic-only data discipline. The runner still uses caller-injected handlers and is not wired to live payment operations. Local tests were not run in this scheduled environment.
+
+API endpoints added:
+- POST /api/v1/scenarios/{scenario_id}/versions/{version}/runs
+- POST /api/v1/scenario-runs/{run_id}/evidence
+- GET /api/v1/scenario-runs/{run_id}/evidence
+- GET /api/v1/scenario-runs/{run_id}/timeline
+
 ## Current limitations and roadmap
 
-1. Day 7: deterministic assertion evaluation and run finalization, with positive/negative tests.
-2. Days 8–10: timeline/evidence records, report schema/export and deterministic replay.
+1. Day 8: structured event timeline, durable step/assertion evidence and ordered query APIs (CI verification pending).
+2. Days 9–10: report schema/export and deterministic replay.
 3. Days 11–16: stage-aware failure injection, ambiguous outcomes, retry/idempotency and crash/recovery tests.
 4. Days 17–22: webhook model, outbox, delivery worker, retries, faults, ordering and synthetic signatures.
 5. Days 23–26: controlled concurrency/race scenarios and evidence-grounded reports.

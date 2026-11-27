@@ -511,3 +511,64 @@ class ScenarioRunDB(Base):
               "scenario_id", "scenario_version", "created_at"),
         Index("ix_scenario_runs_status_created", "status", "created_at"),
     )
+
+
+class ScenarioStepEvidenceDB(Base):
+    """Insert-only step result evidence ordered within a scenario run."""
+
+    __tablename__ = "scenario_step_evidence"
+
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("scenario_runs.run_id", ondelete="RESTRICT"), primary_key=True)
+    step_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    output_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    error: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "ordinal", name="uq_scenario_step_evidence_ordinal"),
+        CheckConstraint("ordinal >= 1", name="ck_scenario_step_evidence_ordinal_positive"),
+        CheckConstraint("status IN ('pending', 'running', 'passed', 'failed', 'skipped')", name="ck_scenario_step_evidence_status"),
+    )
+
+
+class ScenarioAssertionEvidenceDB(Base):
+    """Insert-only assertion results ordered within a scenario run."""
+
+    __tablename__ = "scenario_assertion_evidence"
+
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("scenario_runs.run_id", ondelete="RESTRICT"), primary_key=True)
+    assertion_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    expected_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    observed_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    message: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "ordinal", name="uq_scenario_assertion_evidence_ordinal"),
+        CheckConstraint("ordinal >= 1", name="ck_scenario_assertion_evidence_ordinal_positive"),
+        CheckConstraint("status IN ('pending', 'passed', 'failed', 'skipped')", name="ck_scenario_assertion_evidence_status"),
+    )
+
+
+class ScenarioRunEventDB(Base):
+    """Append-only timeline events with a deterministic per-run sequence."""
+
+    __tablename__ = "scenario_run_events"
+
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("scenario_runs.run_id", ondelete="RESTRICT"), primary_key=True)
+    sequence: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    step_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    assertion_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("sequence >= 1", name="ck_scenario_run_events_sequence_positive"),
+        CheckConstraint("event_type IN ('run_started', 'step_started', 'step_completed', 'step_failed', 'step_skipped', 'assertion_evaluated', 'run_completed')", name="ck_scenario_run_events_type"),
+        Index("ix_scenario_run_events_run_sequence", "run_id", "sequence"),
+    )

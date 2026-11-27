@@ -127,9 +127,9 @@ The CI workflow uses separate PostgreSQL services for the Python/API and E2E job
 No PCI DSS compliance or production payment capability is claimed.
 
 
-## Target architecture: reliability scenario lab (planned)
+## Target architecture: reliability scenario lab
 
-The existing modular monolith and PostgreSQL foundation remain. The pivot introduces a scenario execution subsystem rather than a rewrite or service split.
+The existing modular monolith and PostgreSQL foundation remain. The pivot introduces a scenario execution subsystem rather than a rewrite or service split. Day 8 adds persisted step/assertion results and a structured append-only timeline, linked by run UUID and stored atomically with run finalization. Scalar evidence rejects common PAN/CVV/CVC, card-number, raw-request/response and credential/secret key names; this key-name guard is not a data-classification or PCI control. The runner remains caller-injected; evidence storage does not itself perform payment operations.
 
 ```text
 Scenario Definition -> Scenario Runner -> Execution Engine

@@ -168,3 +168,8 @@ The persistence increment adds PostgreSQL integration coverage for definition ro
 CI run [#93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) passed all three jobs for the Day 7 implementation. The runner evaluates six assertion kinds against scalar step-output observations, fails missing/type-invalid observations, and finalizes run status based on both step and assertion results. Three added tests cover all-kind success, mismatch failure and missing-observation failure. Exact CI test counts were not available through the inspected API metadata, and no local suite was run.
 
 Observations are supplied by injected handlers, not independent live payment, PostgreSQL or audit queries. Step and assertion evidence is not persisted yet.
+
+
+## Scenario-run evidence and timeline
+
+Day 8 adds CI coverage for run creation from a frozen version, result submission, reconstruction, timeline sequence ordering, evidence retrieval, duplicate-terminal submission rejection, snapshot mismatch rejection and append-only runtime table privileges. The runner emits ordered events for run start, step start/completion/failure/skip, assertion evaluation and run completion. Evidence scalar validation rejects common PAN/CVV/CVC, card-number, raw-payload and credential/secret key names, while preserving bounded scalar output values. Local execution remains unavailable in the scheduled environment; CI is the verification gate.

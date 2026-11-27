@@ -25,6 +25,9 @@ def test_order_and_context():
     assert all(r.status==ScenarioStepStatus.PASSED for r in result.step_results)
     assert result.step_results[1].output=={"previous":1}
     assert result.run.status.value=="passed"
+    assert result.events[0].event_type.value=="run_started"
+    assert result.events[-1].event_type.value=="run_completed"
+    assert [event.sequence for event in result.events]==list(range(1,len(result.events)+1))
 
 def test_missing_handler_fails_and_skips_dependency():
     result=ScenarioRunner({},clock=lambda:NOW).run(scenario([
@@ -121,3 +124,11 @@ def test_missing_observation_fails_assertion_without_observed_value():
     assert assertion_result.observed is None
     assert "No observation" in assertion_result.message
     assert result.run.status.value == "failed"
+
+
+def test_sensitive_output_keys_are_rejected_and_error_is_sanitized():
+    result = ScenarioRunner({ScenarioAction.VERIFY:lambda p,o:{"cvv":"123"}},clock=lambda:NOW).run(
+        scenario([ScenarioStepDefinition(step_id="first",action=ScenarioAction.VERIFY)]))
+    assert result.step_results[0].status==ScenarioStepStatus.FAILED
+    assert "123" not in result.step_results[0].error
+    assert result.run.status.value=="failed"

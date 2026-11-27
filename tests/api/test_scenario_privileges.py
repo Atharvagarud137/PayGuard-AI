@@ -13,7 +13,16 @@ def test_runtime_scenario_storage_privileges_are_restricted(db_session):
             has_table_privilege(current_user, 'public.scenario_runs', 'UPDATE') AS runs_table_update,
             has_table_privilege(current_user, 'public.scenario_runs', 'DELETE') AS runs_delete,
             has_column_privilege(current_user, 'public.scenario_runs', 'status', 'UPDATE') AS runs_status_update,
-            has_column_privilege(current_user, 'public.scenario_runs', 'snapshot_json', 'UPDATE') AS runs_snapshot_update
+            has_column_privilege(current_user, 'public.scenario_runs', 'snapshot_json', 'UPDATE') AS runs_snapshot_update,
+            has_table_privilege(current_user, 'public.scenario_step_evidence', 'SELECT') AS step_read,
+            has_table_privilege(current_user, 'public.scenario_step_evidence', 'INSERT') AS step_insert,
+            has_table_privilege(current_user, 'public.scenario_step_evidence', 'UPDATE') AS step_update,
+            has_table_privilege(current_user, 'public.scenario_step_evidence', 'DELETE') AS step_delete,
+            has_table_privilege(current_user, 'public.scenario_assertion_evidence', 'INSERT') AS assertion_insert,
+            has_table_privilege(current_user, 'public.scenario_assertion_evidence', 'UPDATE') AS assertion_update,
+            has_table_privilege(current_user, 'public.scenario_run_events', 'INSERT') AS events_insert,
+            has_table_privilege(current_user, 'public.scenario_run_events', 'UPDATE') AS events_update,
+            has_table_privilege(current_user, 'public.scenario_run_events', 'DELETE') AS events_delete
     """)).mappings().one()
     assert privileges["definitions_read"] is True
     assert privileges["definitions_insert"] is True
@@ -25,3 +34,12 @@ def test_runtime_scenario_storage_privileges_are_restricted(db_session):
     assert privileges["runs_delete"] is False
     assert privileges["runs_status_update"] is True
     assert privileges["runs_snapshot_update"] is False
+    assert privileges["step_read"] is True
+    assert privileges["step_insert"] is True
+    assert privileges["step_update"] is False
+    assert privileges["step_delete"] is False
+    assert privileges["assertion_insert"] is True
+    assert privileges["assertion_update"] is False
+    assert privileges["events_insert"] is True
+    assert privileges["events_update"] is False
+    assert privileges["events_delete"] is False

@@ -52,6 +52,7 @@ from app.repositories.postgres_transaction_repository import (
     PostgresTransactionRepository,
 )
 from app.routes.dashboard import router as dashboard_router
+from app.routes.scenario_evidence import router as scenario_evidence_router
 from app.services.audit_service import AuditService
 from app.services.payment_service import PaymentService
 from app.security import (
@@ -130,6 +131,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(
     dashboard_router,
+    dependencies=[Depends(require_service_access)],
+)
+app.include_router(
+    scenario_evidence_router,
     dependencies=[Depends(require_service_access)],
 )
 

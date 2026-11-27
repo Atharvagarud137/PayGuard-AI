@@ -1418,3 +1418,15 @@ Candidate API capabilities:
 - Manage synthetic webhook receiver configuration and delivery evidence in an isolated local environment.
 
 The actual runtime-generated OpenAPI in development/test remains authoritative. Proposed scenario endpoints must not be documented as available until implemented and tested.
+
+
+# 4. Scenario evidence API (Day 8; CI pending)
+
+Scenario run creation and evidence submission/query endpoints are implemented as a synthetic test-lab boundary:
+
+- POST /api/v1/scenarios/{scenario_id}/versions/{version}/runs creates a pending run tied to a frozen stored definition.
+- POST /api/v1/scenario-runs/{run_id}/evidence accepts a terminal ScenarioRunResult for that exact snapshot and run ID. Decimal values in JSON payloads use the tagged form {\"$decimal\":\"10.00\"} to preserve numeric type.
+- GET /api/v1/scenario-runs/{run_id}/evidence retrieves ordered step/assertion evidence and the finalized run record.
+- GET /api/v1/scenario-runs/{run_id}/timeline retrieves timeline events ordered by sequence.
+
+The evidence write is transactional and rejected once the run is no longer pending. Evidence and timeline tables are append-only to the runtime role. The endpoints do not invoke real payment operations or accept production data.

@@ -15,7 +15,11 @@ from app.models import TransactionStatus
 
 
 _ID_PATTERN = r"^[a-z][a-z0-9_-]{0,63}$"
-_BLOCKED_PARAMETER_NAMES = frozenset({"script", "command", "cmd", "executable", "expression", "eval", "shell"})
+_BLOCKED_PARAMETER_NAMES = frozenset({
+    "script", "command", "cmd", "executable", "expression", "eval", "shell",
+    "pan", "cvv", "cvc", "card_number", "cardnumber", "raw_request",
+    "raw_response", "password", "secret", "api_key", "credential",
+})
 StrictDecimal = Annotated[Decimal, Field(strict=True)]
 ScenarioScalar = StrictStr | StrictInt | StrictBool | StrictDecimal
 
@@ -26,11 +30,26 @@ def _aware(value: datetime | None, field_name: str) -> datetime | None:
     return value
 
 
+
+
+def _restore_decimal_tags(value):
+    if isinstance(value, dict):
+        if set(value) == {"$decimal"} and isinstance(value["$decimal"], str):
+            return Decimal(value["$decimal"])
+        return {key: _restore_decimal_tags(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore_decimal_tags(item) for item in value]
+    return value
+
+
 def _validate_scalars(values: dict[str, ScenarioScalar]) -> dict[str, ScenarioScalar]:
     for key, value in values.items():
         if not key.strip() or len(key) > 64:
             raise ValueError("parameter keys must be 1–64 non-whitespace characters")
-        if key.strip().lower() in _BLOCKED_PARAMETER_NAMES:
+        normalized_key = key.strip().lower()
+        if normalized_key in _BLOCKED_PARAMETER_NAMES or any(
+            token in normalized_key for token in ("cvv", "cvc", "pan", "card_number", "raw_request", "raw_response", "password", "secret", "api_key", "credential")
+        ):
             raise ValueError(f"parameter key '{key}' is not allowed")
         if isinstance(value, Decimal) and not value.is_finite():
             raise ValueError("decimal parameters must be finite")
@@ -62,6 +81,18 @@ class ScenarioRunStatus(str, Enum):
     PASSED = "passed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+
+
+class ScenarioEventType(str, Enum):
+    RUN_STARTED = "run_started"
+    STEP_STARTED = "step_started"
+    STEP_COMPLETED = "step_completed"
+    STEP_FAILED = "step_failed"
+    STEP_SKIPPED = "step_skipped"
+    ASSERTION_EVALUATED = "assertion_evaluated"
+    RUN_COMPLETED = "run_completed"
 
 
 class ScenarioAction(str, Enum):
@@ -152,6 +183,11 @@ class ScenarioAssertionDefinition(ScenarioModel):
 
 
 class ScenarioDefinition(ScenarioModel):
+    @model_validator(mode="before")
+    @classmethod
+    def restore_decimal_tags(cls, value):
+        return _restore_decimal_tags(value)
+
     scenario_id: str = Field(pattern=_ID_PATTERN)
     name: str = Field(min_length=1, max_length=120)
     version: int = Field(default=1, ge=1)
@@ -238,6 +274,11 @@ class ScenarioRun(ScenarioModel):
 
 
 class ScenarioStepResult(ScenarioModel):
+    @model_validator(mode="before")
+    @classmethod
+    def restore_decimal_tags(cls, value):
+        return _restore_decimal_tags(value)
+
     step_id: str = Field(pattern=_ID_PATTERN)
     status: ScenarioStepStatus
     started_at: datetime | None = None
@@ -276,6 +317,24 @@ class ScenarioStepResult(ScenarioModel):
 
 
 class ScenarioAssertionResult(ScenarioModel):
+    @model_validator(mode="before")
+    @classmethod
+    def restore_and_normalize_values(cls, value):
+        value = _restore_decimal_tags(value)
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        for field_name in ("expected", "observed"):
+            item = normalized.get(field_name)
+            if isinstance(item, str):
+                for enum_type in (ScenarioStepStatus, TransactionStatus):
+                    try:
+                        normalized[field_name] = enum_type(item)
+                        break
+                    except ValueError:
+                        continue
+        return normalized
+
     assertion_id: str = Field(pattern=_ID_PATTERN)
     status: ScenarioAssertionStatus
     expected: ScenarioExpected
@@ -291,11 +350,58 @@ class ScenarioAssertionResult(ScenarioModel):
         return self
 
 
+
+
+class ScenarioRunEvent(ScenarioModel):
+    sequence: int = Field(ge=1)
+    event_type: ScenarioEventType
+    occurred_at: datetime
+    step_id: str | None = Field(default=None, pattern=_ID_PATTERN)
+    assertion_id: str | None = Field(default=None, pattern=_ID_PATTERN)
+    payload: dict[str, ScenarioScalar] = Field(default_factory=dict, max_length=20)
+
+    @field_validator("occurred_at")
+    @classmethod
+    def validate_timestamp(cls, value: datetime) -> datetime:
+        return _aware(value, "event timestamp")
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, value: dict[str, ScenarioScalar]) -> dict[str, ScenarioScalar]:
+        return _validate_scalars(value)
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_decimal_tags(cls, value):
+        return _restore_decimal_tags(value)
+
+    @model_validator(mode="after")
+    def validate_subject(self):
+        step_events = {ScenarioEventType.STEP_STARTED, ScenarioEventType.STEP_COMPLETED,
+                       ScenarioEventType.STEP_FAILED, ScenarioEventType.STEP_SKIPPED}
+        assertion_events = {ScenarioEventType.ASSERTION_EVALUATED}
+        if self.event_type in step_events and self.step_id is None:
+            raise ValueError("step events require step_id")
+        if self.event_type in assertion_events and self.assertion_id is None:
+            raise ValueError("assertion events require assertion_id")
+        if self.step_id is not None and self.assertion_id is not None:
+            raise ValueError("events may reference only one subject")
+        if self.event_type in {ScenarioEventType.RUN_STARTED, ScenarioEventType.RUN_COMPLETED} and (self.step_id is not None or self.assertion_id is not None):
+            raise ValueError("run events must not reference a step or assertion")
+        return self
+
+
 class ScenarioRunResult(ScenarioModel):
+    @model_validator(mode="before")
+    @classmethod
+    def restore_decimal_tags(cls, value):
+        return _restore_decimal_tags(value)
+
     scenario: ScenarioDefinition
     run: ScenarioRun
     step_results: list[ScenarioStepResult] = Field(default_factory=list, max_length=50)
     assertion_results: list[ScenarioAssertionResult] = Field(default_factory=list, max_length=100)
+    events: list[ScenarioRunEvent] = Field(default_factory=list, max_length=300)
 
     @model_validator(mode="after")
     def validate_result_consistency(self):
@@ -316,6 +422,12 @@ class ScenarioRunResult(ScenarioModel):
             if result.expected != defined_assertions[result.assertion_id].expected:
                 raise ValueError("assertion result expected value must match its definition")
 
+        if self.events:
+            sequences = [event.sequence for event in self.events]
+            if sequences != list(range(1, len(sequences) + 1)):
+                raise ValueError("timeline event sequences must be contiguous and ordered")
+            if self.events[0].event_type != ScenarioEventType.RUN_STARTED or self.events[-1].event_type != ScenarioEventType.RUN_COMPLETED:
+                raise ValueError("timeline must begin with run_started and end with run_completed")
         if self.run.status == ScenarioRunStatus.PASSED:
             if set(step_ids) != defined_steps or any(result.status != ScenarioStepStatus.PASSED for result in self.step_results):
                 raise ValueError("passed runs require a passing result for every defined step")

@@ -3,6 +3,7 @@
 Handlers are explicitly injected. The runner never performs payment operations itself.
 """
 from datetime import datetime, timezone
+from uuid import UUID, uuid4
 from typing import Callable
 
 from app.domain.scenarios import (
@@ -11,6 +12,8 @@ from app.domain.scenarios import (
     ScenarioAssertionResult,
     ScenarioAssertionStatus,
     ScenarioDefinition,
+    ScenarioEventType,
+    ScenarioRunEvent,
     ScenarioRun,
     ScenarioRunResult,
     ScenarioRunStatus,
@@ -103,40 +106,56 @@ class ScenarioRunner:
         self.clock = clock
         self.assertion_registry = assertion_registry or AssertionRegistry()
 
-    def run(self, scenario: ScenarioDefinition) -> ScenarioRunResult:
+    def run(self, scenario: ScenarioDefinition, *, run_id: UUID | str | None = None) -> ScenarioRunResult:
         run = ScenarioRun(
             scenario_id=scenario.scenario_id,
             scenario_version=scenario.version,
+            run_id=run_id or uuid4(),
             status=ScenarioRunStatus.RUNNING,
             started_at=self.clock(),
         )
         results: list[ScenarioStepResult] = []
         outputs: dict[str, dict] = {}
         failed_ids: set[str] = set()
+        events: list[ScenarioRunEvent] = []
+
+        def emit(event_type, occurred_at, *, step_id=None, assertion_id=None, payload=None):
+            events.append(ScenarioRunEvent(
+                sequence=len(events) + 1, event_type=event_type, occurred_at=occurred_at,
+                step_id=step_id, assertion_id=assertion_id, payload=payload or {},
+            ))
+
+        emit(ScenarioEventType.RUN_STARTED, run.started_at, payload={"status": "running"})
 
         for step in scenario.steps:
             if any(dependency in failed_ids for dependency in step.depends_on):
                 results.append(
                     ScenarioStepResult(step_id=step.step_id, status=ScenarioStepStatus.SKIPPED)
                 )
+                emit(ScenarioEventType.STEP_SKIPPED, self.clock(), step_id=step.step_id, payload={"status": "skipped"})
                 failed_ids.add(step.step_id)
                 continue
 
             handler = self.handlers.get(step.action)
             if handler is None:
+                missing_started = self.clock()
+                emit(ScenarioEventType.STEP_STARTED, missing_started, step_id=step.step_id, payload={"status": "running"})
+                missing_finished = self.clock()
                 results.append(
                     ScenarioStepResult(
                         step_id=step.step_id,
                         status=ScenarioStepStatus.FAILED,
-                        started_at=self.clock(),
-                        finished_at=self.clock(),
+                        started_at=missing_started,
+                        finished_at=missing_finished,
                         error=f"No handler registered for action '{step.action.value}'",
                     )
                 )
                 failed_ids.add(step.step_id)
+                emit(ScenarioEventType.STEP_FAILED, missing_finished, step_id=step.step_id, payload={"status": "failed"})
                 continue
 
             started = self.clock()
+            emit(ScenarioEventType.STEP_STARTED, started, step_id=step.step_id, payload={"status": "running"})
             try:
                 output = handler(dict(step.parameters), dict(outputs))
                 if not isinstance(output, dict):
@@ -149,6 +168,7 @@ class ScenarioRunner:
                     output=output,
                 )
                 outputs[step.step_id] = dict(result.output)
+                emit(ScenarioEventType.STEP_COMPLETED, result.finished_at, step_id=step.step_id, payload={"status": "passed"})
             except Exception as exc:
                 result = ScenarioStepResult(
                     step_id=step.step_id,
@@ -158,12 +178,17 @@ class ScenarioRunner:
                     error=f"{type(exc).__name__}: step handler failed",
                 )
                 failed_ids.add(step.step_id)
+                emit(ScenarioEventType.STEP_FAILED, result.finished_at, step_id=step.step_id, payload={"status": "failed"})
             results.append(result)
 
         assertion_results = [
             self.assertion_registry.evaluate(assertion, results)
             for assertion in scenario.assertions
         ]
+        for assertion_result in assertion_results:
+            emit(ScenarioEventType.ASSERTION_EVALUATED, self.clock(),
+                 assertion_id=assertion_result.assertion_id,
+                 payload={"status": assertion_result.status.value})
         all_steps_passed = len(results) == len(scenario.steps) and all(
             result.status == ScenarioStepStatus.PASSED for result in results
         )
@@ -182,9 +207,11 @@ class ScenarioRunner:
             status=ScenarioRunStatus.PASSED if passed else ScenarioRunStatus.FAILED,
             failure_reason=None if passed else "One or more steps or assertions failed",
         )
+        emit(ScenarioEventType.RUN_COMPLETED, finished, payload={"status": final_run.status.value})
         return ScenarioRunResult(
             scenario=scenario,
             run=final_run,
             step_results=results,
             assertion_results=assertion_results,
+            events=events,
         )
