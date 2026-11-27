@@ -129,7 +129,7 @@ No PCI DSS compliance or production payment capability is claimed.
 
 ## Target architecture: reliability scenario lab
 
-The existing modular monolith and PostgreSQL foundation remain. The pivot introduces a scenario execution subsystem rather than a rewrite or service split. Day 8 adds persisted step/assertion results and a structured append-only timeline, linked by run UUID and stored atomically with run finalization. Scalar evidence rejects common PAN/CVV/CVC, card-number, raw-request/response and credential/secret key names; this key-name guard is not a data-classification or PCI control. The runner remains caller-injected; evidence storage does not itself perform payment operations.
+The existing modular monolith and PostgreSQL foundation remain. The pivot introduces a scenario execution subsystem rather than a rewrite or service split. Day 8 adds persisted step/assertion results and a structured append-only timeline, linked by run UUID and stored atomically with run finalization. Scalar evidence rejects common PAN/CVV/CVC, card-number, raw-request/response and credential/secret key names; this key-name guard is not a data-classification or PCI control. The runner remains caller-injected; evidence storage does not itself perform payment operations. CI run [#99](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935233245) verified the Day 8 increment with 187 Python/unit/API tests, 6 dashboard E2E tests and dependency audits passing.
 
 ```text
 Scenario Definition -> Scenario Runner -> Execution Engine

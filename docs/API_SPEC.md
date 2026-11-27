@@ -1420,7 +1420,7 @@ Candidate API capabilities:
 The actual runtime-generated OpenAPI in development/test remains authoritative. Proposed scenario endpoints must not be documented as available until implemented and tested.
 
 
-# 4. Scenario evidence API (Day 8; CI pending)
+# 4. Scenario evidence API (Day 8; verified)
 
 Scenario run creation and evidence submission/query endpoints are implemented as a synthetic test-lab boundary:
 
@@ -1430,3 +1430,6 @@ Scenario run creation and evidence submission/query endpoints are implemented as
 - GET /api/v1/scenario-runs/{run_id}/timeline retrieves timeline events ordered by sequence.
 
 The evidence write is transactional and rejected once the run is no longer pending. Evidence and timeline tables are append-only to the runtime role. The endpoints do not invoke real payment operations or accept production data.
+
+
+Day 8 verification: CI run [#99](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935233245) passed the Python/API job (187 tests, 1 warning), browser E2E job (6 tests, 2 warnings) and dependency audit. Local execution was not performed in the scheduled environment.

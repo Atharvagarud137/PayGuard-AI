@@ -161,9 +161,9 @@ CI run #39 used Python 3.12, PostgreSQL 16 and Node.js 22. It ran the Python uni
 
 **Test-database warning:** fixtures require an already-migrated disposable PostgreSQL database and do not create or drop ORM tables. Point tests only at a dedicated disposable database, never a development or production database.
 
-## Scenario evidence and timeline (Day 8 increment; CI pending)
+## Scenario evidence and timeline (Day 8 complete)
 
-Scenario runs can be created from an immutable stored scenario version, and a terminal runner result can be submitted against that run ID. Step and assertion results, structured events and the run lifecycle are persisted in one database transaction. Timeline queries return a deterministic sequence; evidence records are ordered by the definition's step/assertion ordinals. The evidence tables are insert-only for the runtime role. Common field names associated with PAN/CVV/CVC, card numbers, raw request/response bodies, credentials, secrets, passwords and API keys are rejected in scalar evidence. This is a key-name guard, not a substitute for synthetic-only data discipline. The runner still uses caller-injected handlers and is not wired to live payment operations. Local tests were not run in this scheduled environment.
+Scenario runs can be created from an immutable stored scenario version, and a terminal runner result can be submitted against that run ID. Step and assertion results, structured events and the run lifecycle are persisted in one database transaction. Timeline queries return a deterministic sequence; evidence records are ordered by the definition's step/assertion ordinals. The evidence tables are insert-only for the runtime role. Common field names associated with PAN/CVV/CVC, card numbers, raw request/response bodies, credentials, secrets, passwords and API keys are rejected in scalar evidence. This is a key-name guard, not a substitute for synthetic-only data discipline. The runner still uses caller-injected handlers and is not wired to live payment operations. CI run [#99](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935233245) passed all three jobs: 187 Python/unit/API tests (1 warning), 6 E2E tests (2 warnings), and dependency audits. No local tests or local migration run were performed.
 
 API endpoints added:
 - POST /api/v1/scenarios/{scenario_id}/versions/{version}/runs
