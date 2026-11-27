@@ -70,6 +70,8 @@ def _restore_decimal_tags(payload):
 
 def _ensure_payload_size(payload, *, limit: int = MAX_SCENARIO_PAYLOAD_BYTES):
     if len(canonical_json(payload).encode("utf-8")) > limit:
+        if limit == MAX_SCENARIO_PAYLOAD_BYTES:
+            raise ValueError("scenario payload exceeds 64 KiB")
         raise ValueError(f"scenario evidence payload exceeds {limit} bytes")
 
 

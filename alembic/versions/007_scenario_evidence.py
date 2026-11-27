@@ -67,9 +67,9 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'payguard_app') THEN
-                REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_step_evidence FROM payguard_app;
-                REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_assertion_evidence FROM payguard_app;
-                REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.scenario_run_events FROM payguard_app;
+                REVOKE ALL PRIVILEGES ON TABLE public.scenario_step_evidence FROM payguard_app, PUBLIC;
+                REVOKE ALL PRIVILEGES ON TABLE public.scenario_assertion_evidence FROM payguard_app, PUBLIC;
+                REVOKE ALL PRIVILEGES ON TABLE public.scenario_run_events FROM payguard_app, PUBLIC;
                 GRANT SELECT, INSERT ON TABLE public.scenario_step_evidence TO payguard_app;
                 GRANT SELECT, INSERT ON TABLE public.scenario_assertion_evidence TO payguard_app;
                 GRANT SELECT, INSERT ON TABLE public.scenario_run_events TO payguard_app;
