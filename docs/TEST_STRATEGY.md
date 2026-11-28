@@ -1,6 +1,6 @@
 # PayGuard-AI test strategy
 
-**Status date: 26 November 2026.**
+**Status date: 28 November 2026.**
 
 ## Testing objective
 
@@ -17,14 +17,14 @@ Validate payment lifecycle correctness, persistence, transaction atomicity, conc
 
 ## Latest verified CI evidence
 
-GitHub Actions [run #93](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45749516234) for commit `b54258c` completed successfully on 26 November 2026. Run #80 remains the historical Day 3 schema evidence.
+GitHub Actions [run #99](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935233245) for Day 8 completed successfully, followed by evidence/status [run #100](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935515769), which also passed all three jobs. Run #80 remains the historical Day 3 schema evidence.
 
 | CI job | Result |
 |---|---|
-| Python unit and API | 163 passed, 1 warning |
-| Dashboard Playwright E2E | 6 passed, 2 warnings |
-| Python dependency audit | Passed |
-| JavaScript dependency audit | Passed |
+| Python unit and API | Day 8 run #99: 187 passed, 1 warning |
+| Dashboard Playwright E2E | Day 8 run #99: 6 passed, 2 warnings |
+| Python dependency audit | Passed in runs #99 and #100 |
+| JavaScript dependency audit | Passed in runs #99 and #100 |
 
 The run completed all three CI jobs. Warnings remain: Starlette's TestClient/httpx deprecation, pytest fixture deprecation, Node dependency deprecations and GitHub Actions Node-runtime notices.
 
@@ -173,3 +173,8 @@ Observations are supplied by injected handlers, not independent live payment, Po
 ## Scenario-run evidence and timeline
 
 Day 8 adds CI coverage for run creation from a frozen version, result submission, reconstruction, timeline sequence ordering, evidence retrieval, duplicate-terminal submission rejection, snapshot mismatch rejection and append-only runtime table privileges. The runner emits ordered events for run start, step start/completion/failure/skip, assertion evaluation and run completion. Evidence scalar validation rejects common PAN/CVV/CVC, card-number, raw-payload and credential/secret key names, while preserving bounded scalar output values. CI run [#99](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935233245) passed: 187 Python/unit/API tests (1 warning), 6 E2E tests (2 warnings) and dependency audits. Local execution remains unavailable in the scheduled environment.
+
+
+## Day 9 JSON report tests (28 November 2026; CI pending)
+
+The report service builds a versioned schema-v1 artifact from persisted run metadata and terminal evidence without re-execution. Unit tests cover passing and failed summary counts and ensure handler exception details are not exposed. API tests cover report retrieval, missing/pending runs, schema version 1 and rejection of unsupported schema versions. CI verification is pending; no local execution was performed in the scheduled environment.

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.domain.scenarios import ScenarioRunResult
 from app.repositories.postgres_scenario_repository import PostgresScenarioRepository
+from app.services.scenario_report import ScenarioRunReportV1, build_scenario_run_report
 
 router = APIRouter(prefix="/api/v1", tags=["Scenario evidence"])
 
@@ -59,3 +60,28 @@ def get_scenario_timeline(run_id: UUID, db: Session = Depends(get_db)):
     if run is None:
         raise HTTPException(status_code=404, detail="Scenario run not found")
     return jsonable_encoder(repository.list_events(str(run_id)))
+
+
+@router.get("/scenario-runs/{run_id}/report")
+def get_scenario_run_report(run_id: UUID, db: Session = Depends(get_db)):
+    repository = PostgresScenarioRepository(db)
+    record = repository.get_run(str(run_id))
+    if record is None:
+        raise HTTPException(status_code=404, detail="Scenario run not found")
+    evidence = repository.get_evidence(str(run_id))
+    if evidence is None:
+        raise HTTPException(status_code=409, detail="Scenario run has no persisted terminal evidence")
+    try:
+        report = build_scenario_run_report(record, evidence)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Stored scenario evidence is inconsistent") from exc
+    return report.model_dump(mode="json")
+
+
+@router.get("/scenario-run-reports/schema/{version}")
+def get_scenario_report_schema(version: int):
+    if version != 1:
+        raise HTTPException(status_code=404, detail="Scenario report schema version not found")
+    schema = ScenarioRunReportV1.model_json_schema()
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    return schema

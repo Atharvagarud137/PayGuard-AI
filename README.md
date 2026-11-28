@@ -171,10 +171,20 @@ API endpoints added:
 - GET /api/v1/scenario-runs/{run_id}/evidence
 - GET /api/v1/scenario-runs/{run_id}/timeline
 
+## JSON report artifact (Day 9; CI pending)
+
+Terminal scenario evidence can be rendered as a versioned JSON report with summary counts, run and scenario metadata, the frozen-snapshot digest, step/assertion results and ordered timeline. Schema version 1 is exposed as JSON Schema.
+
+- GET /api/v1/scenario-runs/{run_id}/report
+- GET /api/v1/scenario-run-reports/schema/1
+
+The report is generated from persisted evidence and does not execute payment operations. The report endpoint and schema endpoint are awaiting CI verification.
+
 ## Current limitations and roadmap
 
-1. Day 8: structured event timeline, durable step/assertion evidence and ordered query APIs (CI verification pending).
-2. Days 9–10: report schema/export and deterministic replay.
+1. Day 8: structured event timeline, durable step/assertion evidence and ordered query APIs (verified by CI runs #99 and #100).
+2. Day 9: versioned JSON report artifact and schema API (implementation committed; CI verification pending).
+3. Day 10: deterministic replay.
 3. Days 11–16: stage-aware failure injection, ambiguous outcomes, retry/idempotency and crash/recovery tests.
 4. Days 17–22: webhook model, outbox, delivery worker, retries, faults, ordering and synthetic signatures.
 5. Days 23–26: controlled concurrency/race scenarios and evidence-grounded reports.
