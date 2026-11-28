@@ -1435,9 +1435,12 @@ The evidence write is transactional and rejected once the run is no longer pendi
 Day 8 verification: CI run [#99](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935233245) passed the Python/API job (187 tests, 1 warning), browser E2E job (6 tests, 2 warnings) and dependency audit. Evidence/status commit [#100](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/45935515769) also passed all three jobs. Local execution was not performed in the scheduled environment.
 
 
-# 5. Scenario-run report API (Day 9; CI verification pending)
+# 5. Scenario-run report API (Day 9; verified)
 
 - GET /api/v1/scenario-runs/{run_id}/report returns schema-version-1 JSON derived from a stored terminal run and its persisted evidence. The report includes scenario/run metadata, the frozen scenario snapshot SHA-256, a summary of step and assertion counts/duration, results and the ordered timeline.
 - GET /api/v1/scenario-run-reports/schema/1 returns the JSON Schema for the version-1 report contract. Unsupported versions return 404.
 
 The report endpoint returns 404 for an unknown run and 409 when terminal evidence has not been persisted. It does not rerun the scenario. Decimal values are serialized as strings by the JSON model representation to avoid precision loss. This is synthetic evidence only.
+
+
+Day 9 verification: CI run [#101](https://github.com/Atharvagarud137/PayGuard-AI/actions/runs/46103670172) passed all three jobs: 192 Python/unit/API tests (1 warning), 6 browser E2E tests (2 warnings) and dependency audits. No local execution was performed.
